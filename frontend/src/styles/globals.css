@@ -1,0 +1,143 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    @apply bg-background text-text1 font-body;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  input,
+  textarea,
+  select {
+    @apply text-text1;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-text3;
+  }
+
+  ::-webkit-scrollbar       { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-mist; border-radius: 2px; }
+
+  ::selection { background: rgba(198,241,53,0.2); @apply text-text1; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-lime text-background font-bold px-5 py-2.5 rounded-md
+           text-sm tracking-wide uppercase transition-all duration-150
+           hover:brightness-110 hover:-translate-y-px cursor-pointer
+           inline-flex items-center gap-2 border-0;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-text2 border border-edge font-semibold
+           px-5 py-2.5 rounded-md text-sm transition-all duration-150
+           hover:border-mist hover:text-text1 cursor-pointer
+           inline-flex items-center gap-2;
+  }
+  .btn-ember {
+    @apply bg-ember text-background font-bold px-5 py-2.5 rounded-md
+           text-sm tracking-wide uppercase transition-all duration-150
+           hover:brightness-110 hover:-translate-y-px cursor-pointer
+           inline-flex items-center gap-2 border-0;
+  }
+
+  .card {
+    @apply bg-lift border border-edge rounded-xl overflow-hidden;
+  }
+  .card-header {
+    @apply px-5 py-4 border-b border-edge flex items-center justify-between;
+  }
+  .card-title {
+    @apply text-xs font-bold tracking-widest uppercase text-text1 flex items-center gap-2;
+  }
+
+  .tag-lime {
+    @apply bg-lime/10 text-lime border border-lime/20
+           text-[11px] font-bold tracking-wide px-2.5 py-0.5 rounded-sm;
+  }
+  .tag-ember {
+    @apply bg-ember/10 text-ember border border-ember/20
+           text-[11px] font-bold tracking-wide px-2.5 py-0.5 rounded-sm;
+  }
+  .tag-ice {
+    @apply bg-ice/10 text-ice border border-ice/20
+           text-[11px] font-bold tracking-wide px-2.5 py-0.5 rounded-sm;
+  }
+  .tag-muted {
+    @apply bg-white/[0.03] text-text3 border border-edge
+           text-[11px] font-bold tracking-wide px-2.5 py-0.5 rounded-sm;
+  }
+
+  .pulse-dot {
+    @apply w-1.5 h-1.5 rounded-full bg-lime;
+    animation: pulse-anim 1.6s ease-in-out infinite;
+  }
+}
+
+@layer utilities {
+  .font-display { font-family: 'Bebas Neue', sans-serif; }
+  .text-display { font-family: 'Bebas Neue', sans-serif; }
+}
+
+@keyframes pulse-anim {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(1.5); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fade-up 0.3s ease both; }
+
+/* ── Shared components (buttons, inputs, toasts) ── */
+
+/* Fix: btn-secondary — missing from config */
+@layer components {
+  .btn-secondary {
+    @apply bg-transparent text-text2 border border-edge font-semibold
+            px-4 py-2 rounded-md text-sm transition-all duration-150
+            hover:border-mist hover:text-text1 cursor-pointer
+            inline-flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Input base style — reuse everywhere */
+  .input-base {
+    @apply w-full rounded-lg bg-raise border border-edge px-3 py-2.5
+            text-text1 text-sm outline-none placeholder:text-text3
+            focus:border-lime/60 transition-colors duration-150;
+  }
+
+  /* Toast */
+  .toast-success {
+    @apply fixed top-4 right-4 z-50 px-5 py-3 rounded-xl border
+            bg-lift border-lime/30 text-lime text-sm font-semibold
+            shadow-2xl animate-fade-up;
+  }
+  .toast-error {
+    @apply fixed top-4 right-4 z-50 px-5 py-3 rounded-xl border
+            bg-lift border-ruby/30 text-ruby text-sm font-semibold
+            shadow-2xl animate-fade-up;
+  }
+
+  /* Section heading with accent bar */
+  .section-heading {
+    @apply text-text3 text-xs font-bold tracking-widest uppercase
+            flex items-center gap-2 mb-3;
+  }
+  .section-heading::before {
+    content: '';
+    @apply block w-1 h-4 rounded-full bg-lime flex-shrink-0;
+  }
+}

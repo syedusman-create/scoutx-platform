@@ -1,0 +1,31 @@
+{
+  "name": "scoutx-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "*",
+    "@tanstack/react-query": "*",
+    "axios": "*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-dom": "*",
+    "react-hook-form": "*",
+    "react-router-dom": "*",
+    "recharts": "*",
+    "zod": "*",
+    "zustand": "*"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "*",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19",
+    "vite": "*"
+  }
+}
