@@ -1,14 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-
-import { getAthleteByIdApi, getCareerApi, getFitnessTestsApi } from '../api/athlete.api'
+import { supabase } from '../api/supabase.js'
 
 export const useAthleteProfile = (athleteId) => {
   return useQuery({
     queryKey: ['athlete', athleteId],
     enabled: Boolean(athleteId),
     queryFn: async () => {
-      const res = await getAthleteByIdApi(athleteId)
-      return res.data.data
+      const { data, error } = await supabase
+        .from('athlete_profiles')
+        .select('*')
+        .eq('id', athleteId)
+        .single()
+      
+      if (error) throw error
+      return data
     }
   })
 }
@@ -18,8 +23,13 @@ export const useAthleteCareer = (athleteId) => {
     queryKey: ['career', athleteId],
     enabled: Boolean(athleteId),
     queryFn: async () => {
-      const res = await getCareerApi(athleteId)
-      return res.data.data
+      const { data, error } = await supabase
+        .from('career_entries')
+        .select('*')
+        .eq('athlete_id', athleteId)
+      
+      if (error) throw error
+      return data || []
     }
   })
 }
@@ -29,8 +39,13 @@ export const useAthleteFitness = (athleteId) => {
     queryKey: ['fitness', athleteId],
     enabled: Boolean(athleteId),
     queryFn: async () => {
-      const res = await getFitnessTestsApi(athleteId)
-      return res.data.data
+      const { data, error } = await supabase
+        .from('fitness_tests')
+        .select('*')
+        .eq('athlete_id', athleteId)
+      
+      if (error) throw error
+      return data || []
     }
   })
 }

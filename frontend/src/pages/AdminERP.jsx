@@ -6,17 +6,16 @@ export default function AdminERP() {
     <div className="flex flex-col gap-4">
       <div className="bg-surface border border-edge rounded-xl p-5">
         <div className="text-display text-3xl tracking-wide">Admin ERP</div>
-        <div className="text-text2 text-sm mt-1">Tabs for data management, verification, analytics, and social posting.</div>
+        <div className="text-text2 text-sm mt-1">Platform management console.</div>
       </div>
 
       <div className="bg-surface border border-edge rounded-xl p-3 flex flex-wrap gap-2">
         <AdminTab to="/admin/erp/overview" label="Overview" />
         <AdminTab to="/admin/erp/users" label="Users" />
+        <AdminTab to="/admin/erp/athletes" label="Athletes" />
+        <AdminTab to="/admin/erp/clubs" label="Clubs" />
         <AdminTab to="/admin/erp/verification" label="Verification" />
-        <AdminTab to="/admin/erp/audit-logs" label="Audit Logs" />
         <AdminTab to="/admin/erp/analytics" label="Analytics" />
-        <AdminTab to="/admin/erp/social-posts" label="Social Posting" />
-        <AdminTab to="/admin/erp/integrations" label="Integrations" />
       </div>
 
       <Outlet />

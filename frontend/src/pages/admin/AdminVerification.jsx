@@ -1,11 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  listAthletesForAdminApi,
-  listClubsForAdminApi,
-  verifyAthleteApi,
-  verifyClubApi
-} from '../../api/admin.api'
+import { supabase } from '../../api/supabase.js'
 
 export default function AdminVerification() {
   const qc = useQueryClient()
@@ -14,19 +9,61 @@ export default function AdminVerification() {
 
   const athletesQ = useQuery({
     queryKey: ['admin-athletes-verification'],
-    queryFn: async () => (await listAthletesForAdminApi({ limit: 100 })).data.data || []
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('athlete_profiles')
+        .select(`
+          *,
+          users:user_id (email)
+        `)
+      if (error) throw error
+      return (data || []).map(a => ({
+        ...a,
+        user_email: a.users?.email
+      }))
+    }
   })
+
   const clubsQ = useQuery({
     queryKey: ['admin-clubs-verification'],
-    queryFn: async () => (await listClubsForAdminApi({ limit: 100 })).data.data || []
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('club_profiles')
+        .select(`
+          *,
+          users:user_id (email)
+        `)
+      if (error) throw error
+      return (data || []).map(c => ({
+        ...c,
+        user_email: c.users?.email
+      }))
+    }
   })
 
   const verifyAthleteM = useMutation({
-    mutationFn: verifyAthleteApi,
+    mutationFn: async ({ athleteId, is_verified }) => {
+      const { data, error } = await supabase
+        .from('athlete_profiles')
+        .update({ age_verified: is_verified })
+        .eq('id', athleteId)
+        .select()
+      if (error) throw error
+      return data
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-athletes-verification'] })
   })
+
   const verifyClubM = useMutation({
-    mutationFn: verifyClubApi,
+    mutationFn: async ({ clubId, is_verified }) => {
+      const { data, error } = await supabase
+        .from('club_profiles')
+        .update({ is_verified })
+        .eq('id', clubId)
+        .select()
+      if (error) throw error
+      return data
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-clubs-verification'] })
   })
 

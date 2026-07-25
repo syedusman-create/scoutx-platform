@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate } from 'react-router-dom'
 
 import useAuth from '../hooks/useAuth'
+import { supabase } from '../api/supabase.js'
+import { resolvePostAuthRoute } from '../utils/authFlow.js'
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -33,11 +35,23 @@ export default function Signup() {
   const onSubmit = async (values) => {
     setErrorMsg('')
     try {
-      await auth.signup(values)
-      if (values.role === 'club') navigate('/club/dashboard')
-      else navigate('/feed')
+      const result = await auth.signup(values)
+      if (!result?.session?.access_token || !result?.user?.id) {
+        setErrorMsg('Account created. Check your email to confirm the signup before logging in.')
+        return
+      }
+      const user = result?.user
+      const { data: dbUser } = user
+        ? await supabase
+            .from('users')
+            .select('role, onboarding_completed')
+            .eq('id', user.id)
+            .single()
+        : { data: null }
+
+      navigate(resolvePostAuthRoute(dbUser?.role || values.role, Boolean(dbUser?.onboarding_completed)), { replace: true })
     } catch (e) {
-      setErrorMsg(e?.response?.data?.error || 'Signup failed')
+      setErrorMsg(e?.message || 'Signup failed')
     }
   }
 
@@ -55,7 +69,7 @@ export default function Signup() {
         <div className="absolute inset-0 bg-black/55" />
         <div className="relative z-10 p-10 flex flex-col justify-between">
           <div className="flex items-center gap-3">
-            <img src="/scoutx-logo.png" alt="ScoutX logo" className="h-10 w-10 rounded-lg object-cover" />
+            <img src="/scoutx-logo.png" alt="ScoutX logo" className="h-10 w-10 object-contain" />
             <div className="text-white text-2xl font-semibold">ScoutX</div>
           </div>
           <div>
@@ -68,7 +82,7 @@ export default function Signup() {
       <div className="bg-surface p-6 sm:p-10 flex items-center justify-center">
         <div className="w-full max-w-md">
           <div className="flex items-center gap-3 lg:hidden">
-            <img src="/scoutx-logo.png" alt="ScoutX logo" className="h-9 w-9 rounded-md object-cover" />
+            <img src="/scoutx-logo.png" alt="ScoutX logo" className="h-9 w-9 object-contain" />
             <div className="text-display text-2xl">ScoutX</div>
           </div>
           <div className="mt-4 text-display text-3xl">Create account</div>
@@ -130,4 +144,3 @@ export default function Signup() {
     </div>
   )
 }
-

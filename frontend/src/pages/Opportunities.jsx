@@ -1,7 +1,7 @@
 import React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext.jsx'
-import { listOpportunitiesApi, applyOpportunityApi, listMyApplicationsApi, createOpportunityApi } from '../api/opportunity.api'
+import { supabase } from '../api/supabase.js'
 
 export default function Opportunities() {
   const { user } = useAuth()
@@ -10,8 +10,20 @@ export default function Opportunities() {
   const opportunitiesQ = useQuery({
     queryKey: ['opportunities'],
     queryFn: async () => {
-      const res = await listOpportunitiesApi()
-      return res.data.data || []
+      const { data, error } = await supabase
+        .from('opportunities')
+        .select(`
+          *,
+          club_profiles (
+            club_name,
+            logo_url
+          )
+        `)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      return data || []
     }
   })
 
@@ -19,20 +31,52 @@ export default function Opportunities() {
     queryKey: ['my-applications'],
     enabled: user?.role === 'athlete',
     queryFn: async () => {
-      const res = await listMyApplicationsApi()
-      return res.data
+      const { data: profile } = await supabase
+        .from('athlete_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+      
+      if (!profile) return []
+
+      const { data, error } = await supabase
+        .from('applications')
+        .select('*')
+        .eq('athlete_id', profile.id)
+      
+      if (error) throw error
+      return data || []
     }
   })
 
   const applyM = useMutation({
-    mutationFn: async (opportunityId) => applyOpportunityApi(opportunityId),
+    mutationFn: async (opportunityId) => {
+      const { data: profile } = await supabase
+        .from('athlete_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+      
+      if (!profile) throw new Error('Athlete profile not found')
+
+      const { data, error } = await supabase
+        .from('applications')
+        .insert({
+          opportunity_id: opportunityId,
+          athlete_id: profile.id
+        })
+        .select()
+      
+      if (error) throw error
+      return data
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['opportunities'] })
       qc.invalidateQueries({ queryKey: ['my-applications'] })
     }
   })
 
-  const myAppliedIds = new Set((myAppsQ?.data?.data || []).map((app) => String(app.opportunity_id)))
+  const myAppliedIds = new Set((myAppsQ?.data || []).map((app) => String(app.opportunity_id)))
   const [clubForm, setClubForm] = React.useState({
     title: '',
     position: '',
@@ -44,12 +88,32 @@ export default function Opportunities() {
   })
 
   const createOppM = useMutation({
-    mutationFn: async () =>
-      createOpportunityApi({
-        ...clubForm,
-        min_fitness: clubForm.min_fitness === '' ? null : Number(clubForm.min_fitness),
-        trial_date: clubForm.trial_date || null
-      }),
+    mutationFn: async () => {
+      const { data: profile } = await supabase
+        .from('club_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+      
+      if (!profile) throw new Error('Club profile not found')
+
+      const { data, error } = await supabase
+        .from('opportunities')
+        .insert({
+          club_id: profile.id,
+          title: clubForm.title,
+          position: clubForm.position,
+          contract_type: clubForm.contract_type,
+          trial_date: clubForm.trial_date || null,
+          venue: clubForm.venue,
+          description: clubForm.description,
+          min_fitness: clubForm.min_fitness === '' ? null : Number(clubForm.min_fitness)
+        })
+        .select()
+      
+      if (error) throw error
+      return data
+    },
     onSuccess: async () => {
       setClubForm({
         title: '',
@@ -80,7 +144,7 @@ export default function Opportunities() {
             <textarea className="rounded-md bg-raised border border-edge px-3 py-2 md:col-span-2 min-h-[90px]" placeholder="Description" value={clubForm.description} onChange={(e) => setClubForm((f) => ({ ...f, description: e.target.value }))} />
             <input type="number" className="rounded-md bg-raised border border-edge px-3 py-2" placeholder="Min fitness (optional)" value={clubForm.min_fitness} onChange={(e) => setClubForm((f) => ({ ...f, min_fitness: e.target.value }))} />
           </div>
-          {createOppM.isError ? <div className="mt-2 text-ember text-sm">{createOppM.error?.response?.data?.error || 'Failed to create opportunity'}</div> : null}
+          {createOppM.isError ? <div className="mt-2 text-ember text-sm">{createOppM.error?.message || 'Failed to create opportunity'}</div> : null}
           {createOppM.isSuccess ? <div className="mt-2 text-lime text-sm">Opportunity posted.</div> : null}
           <button className="mt-3 btn-primary text-xs" onClick={() => createOppM.mutate()} disabled={createOppM.isPending || !clubForm.title.trim()}>
             {createOppM.isPending ? 'Posting...' : 'Post opportunity'}
@@ -88,7 +152,7 @@ export default function Opportunities() {
         </div>
       ) : null}
       {applyM.isError ? (
-        <div className="card p-3 text-ember text-sm">{applyM.error?.response?.data?.error || 'Application failed'}</div>
+        <div className="card p-3 text-ember text-sm">{applyM.error?.message || 'Application failed'}</div>
       ) : null}
       {applyM.isSuccess ? (
         <div className="card p-3 text-lime text-sm">Application submitted.</div>
@@ -97,7 +161,7 @@ export default function Opportunities() {
       {opportunitiesQ.isLoading ? (
         <div className="card p-4 text-text2">Loading opportunities...</div>
       ) : opportunitiesQ.isError ? (
-        <div className="card p-4 text-ember">{opportunitiesQ.error?.response?.data?.error || 'Failed to load opportunities'}</div>
+        <div className="card p-4 text-ember">{opportunitiesQ.error?.message || 'Failed to load opportunities'}</div>
       ) : opportunitiesQ.data.length === 0 ? (
         <div className="card p-4 text-text2">No opportunities available.</div>
       ) : (
@@ -108,7 +172,7 @@ export default function Opportunities() {
                 <div>
                   <div className="text-text1 font-semibold text-lg">{opp.title}</div>
                   <div className="text-text2 text-sm">
-                    {opp.club_name} • {opp.position || 'Any position'}
+                    {opp.club_profiles?.club_name || 'Club'} • {opp.position || 'Any position'}
                   </div>
                 </div>
                 <div className="text-ember font-bold text-xl">{opp.min_fitness ? `FS >= ${opp.min_fitness}` : ''}</div>

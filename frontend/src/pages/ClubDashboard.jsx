@@ -1,14 +1,22 @@
 import React, { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-
+import { useAuth } from '../context/AuthContext.jsx'
+import { supabase } from '../api/supabase.js'
 import PipelineBoard from '../components/club/PipelineBoard.jsx'
-import { getMyClubApi, listShortlistsApi, updateMyClubApi, upsertShortlistApi } from '../api/club.api'
 
 export default function ClubDashboard() {
+  const { user } = useAuth()
   const qc = useQueryClient()
   const [errorMsg, setErrorMsg] = useState('')
   const [editing, setEditing] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
+  const [activeTab, setActiveTab] = useState('athletes')
+  const [athleteFilters, setAthleteFilters] = useState({
+    position: 'all',
+    city: '',
+    minFitnessScore: 0
+  })
   const [form, setForm] = useState({
     club_name: '',
     league: '',
@@ -20,30 +28,91 @@ export default function ClubDashboard() {
   })
 
   const myClubQ = useQuery({
-    queryKey: ['club-me'],
+    queryKey: ['club-me', user?.id],
+    enabled: Boolean(user?.id),
     queryFn: async () => {
-      const res = await getMyClubApi()
-      return res.data.data
+      const { data, error } = await supabase
+        .from('club_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
+      if (error) throw error
+      return data
     }
   })
 
-  const shortlistsQ = useQuery({
-    queryKey: ['club-shortlists'],
+  const athletesQ = useQuery({
+    queryKey: ['club-athletes'],
     queryFn: async () => {
-      const res = await listShortlistsApi()
-      return res.data.data || []
+      const { data, error } = await supabase
+        .from('athlete_profiles')
+        .select('id, user_id, full_name, position, city, state, fitness_score, headline, avatar_url, is_open')
+        .order('fitness_score', { ascending: false })
+      if (error) throw error
+      return data || []
+    }
+  })
+
+  const pipelineQ = useQuery({
+    queryKey: ['club-pipeline', myClubQ.data?.id],
+    enabled: Boolean(myClubQ.data?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('applications')
+        .select(`
+          id,
+          opportunity_id,
+          status,
+          applied_at,
+          opportunities!inner (
+            id,
+            title,
+            club_id
+          ),
+          athlete_profiles (
+            id,
+            full_name,
+            position,
+            city,
+            state,
+            fitness_score,
+            total_matches,
+            total_goals
+          )
+        `)
+        .eq('opportunities.club_id', myClubQ.data.id)
+        .order('applied_at', { ascending: false })
+      if (error) throw error
+      return (data || []).map(a => ({
+        id: a.id,
+        opportunity_id: a.opportunity_id,
+        opportunity_title: a.opportunities?.title || 'Opportunity',
+        athlete_id: a.athlete_profiles?.id,
+        full_name: a.athlete_profiles?.full_name || 'Athlete',
+        position: a.athlete_profiles?.position || '—',
+        city: a.athlete_profiles?.city || '',
+        state: a.athlete_profiles?.state || '',
+        fitness_score: a.athlete_profiles?.fitness_score || 0,
+        stage: a.status || 'applied'
+      }))
     }
   })
 
   const upsertM = useMutation({
-    mutationFn: async ({ athleteId, stage }) => {
-      return upsertShortlistApi({ athleteId, stage, notes: null })
+    mutationFn: async ({ applicationId, stage }) => {
+      const { data, error } = await supabase
+        .from('applications')
+        .update({ status: stage })
+        .eq('id', applicationId)
+        .select()
+      if (error) throw error
+      return data
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['club-shortlists'] })
+      await qc.invalidateQueries({ queryKey: ['club-pipeline'] })
     },
     onError: (e) => {
-      setErrorMsg(e?.response?.data?.error || 'Failed to update stage')
+      setErrorMsg(e?.message || 'Failed to update stage')
     }
   })
 
@@ -63,29 +132,64 @@ export default function ClubDashboard() {
 
   const saveClubM = useMutation({
     mutationFn: async () => {
-      return updateMyClubApi({
-        ...form,
-        founded_year: form.founded_year === '' ? null : Number(form.founded_year),
-        logo_url: form.logo_url || null
-      })
+      const { data, error } = await supabase
+        .from('club_profiles')
+        .update({
+          club_name: form.club_name,
+          league: form.league,
+          city: form.city,
+          state: form.state,
+          founded_year: form.founded_year === '' ? null : Number(form.founded_year),
+          logo_url: form.logo_url || null,
+          bio: form.bio || null
+        })
+        .eq('user_id', user.id)
+        .select()
+      if (error) throw error
+      return data[0]
     },
     onSuccess: async () => {
-      setSaveMsg('Club profile saved')
+      setSaveMsg('Club profile saved successfully')
       setEditing(false)
       await qc.invalidateQueries({ queryKey: ['club-me'] })
     },
     onError: (e) => {
-      setSaveMsg(e?.response?.data?.error || 'Failed to save club profile')
+      setSaveMsg(e?.message || 'Failed to save club profile')
     }
   })
 
-  const rows = useMemo(() => shortlistsQ.data || [], [shortlistsQ.data])
+  const athleteRows = useMemo(() => athletesQ.data || [], [athletesQ.data])
+  const positionOptions = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        athleteRows
+          .map((athlete) => athlete.position)
+          .filter(Boolean)
+          .map((value) => String(value).trim())
+      )
+    )
+    return values.sort((a, b) => a.localeCompare(b))
+  }, [athleteRows])
+
+  const filteredAthletes = useMemo(() => {
+    const cityFilter = athleteFilters.city.trim().toLowerCase()
+    return athleteRows.filter((athlete) => {
+      const matchesPosition =
+        athleteFilters.position === 'all' || String(athlete.position || '').trim() === athleteFilters.position
+      const matchesCity =
+        !cityFilter || String(athlete.city || '').toLowerCase().includes(cityFilter)
+      const matchesFitness = Number(athlete.fitness_score || 0) >= Number(athleteFilters.minFitnessScore || 0)
+      return matchesPosition && matchesCity && matchesFitness
+    })
+  }, [athleteFilters.city, athleteFilters.minFitnessScore, athleteFilters.position, athleteRows])
+
+  const pipelineRows = useMemo(() => pipelineQ.data || [], [pipelineQ.data])
 
   return (
     <div className="flex flex-col gap-4">
       <div className="bg-surface border border-edge rounded-xl p-5">
         <div className="text-display text-3xl tracking-wide">Club Dashboard</div>
-        <div className="mt-2 text-text2 text-sm">Pipeline board (shortlisted athletes).</div>
+        <div className="mt-2 text-text2 text-sm">Browse athletes, manage your club profile, and keep the pipeline moving.</div>
         {errorMsg ? <div className="mt-2 text-ember text-sm">{errorMsg}</div> : null}
       </div>
 
@@ -133,21 +237,113 @@ export default function ClubDashboard() {
 
       <div className="bg-surface border border-edge rounded-xl p-5">
         <div className="flex items-center justify-between">
-          <div className="text-display text-2xl tracking-wide">Pipeline</div>
-          <div className="text-text2 text-xs font-mono">{rows.length} total</div>
+          <div className="text-display text-2xl tracking-wide">Athletes</div>
+          <div className="text-text2 text-xs font-mono">{filteredAthletes.length} shown</div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('athletes')}
+            className={`rounded-md border px-3 py-2 text-xs font-bold uppercase tracking-wide ${activeTab === 'athletes' ? 'bg-lime text-background border-lime' : 'bg-raised border-edge text-text1'}`}
+          >
+            Athlete Browser
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('pipeline')}
+            className={`rounded-md border px-3 py-2 text-xs font-bold uppercase tracking-wide ${activeTab === 'pipeline' ? 'bg-lime text-background border-lime' : 'bg-raised border-edge text-text1'}`}
+          >
+            Pipeline
+          </button>
         </div>
 
         <div className="mt-4">
-          {shortlistsQ.isLoading ? (
+          {activeTab === 'athletes' ? (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-xl border border-edge bg-background p-4">
+                <div>
+                  <label className="block text-text2 text-xs font-semibold uppercase tracking-wide mb-1.5">Position</label>
+                  <select
+                    className="input-base"
+                    value={athleteFilters.position}
+                    onChange={(e) => setAthleteFilters((f) => ({ ...f, position: e.target.value }))}
+                  >
+                    <option value="all">All positions</option>
+                    {positionOptions.map((position) => (
+                      <option key={position} value={position}>{position}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-text2 text-xs font-semibold uppercase tracking-wide mb-1.5">City</label>
+                  <input
+                    className="input-base"
+                    placeholder="Search city"
+                    value={athleteFilters.city}
+                    onChange={(e) => setAthleteFilters((f) => ({ ...f, city: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-text2 text-xs font-semibold uppercase tracking-wide mb-1.5">
+                    Min fitness score: {athleteFilters.minFitnessScore}
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    className="w-full accent-lime"
+                    value={athleteFilters.minFitnessScore}
+                    onChange={(e) => setAthleteFilters((f) => ({ ...f, minFitnessScore: Number(e.target.value) }))}
+                  />
+                </div>
+              </div>
+
+              {athletesQ.isLoading ? (
+                <div className="text-text2">Loading athletes…</div>
+              ) : athletesQ.isError ? (
+                <div className="text-ember">{athletesQ.error?.message || 'Failed to load athletes'}</div>
+              ) : filteredAthletes.length === 0 ? (
+                <div className="text-text2">No athletes match the current filters.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {filteredAthletes.map((athlete) => (
+                    <div key={athlete.id} className="rounded-xl border border-edge bg-raised p-4 flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-text1 font-semibold text-base">{athlete.full_name || 'Athlete'}</div>
+                          <div className="text-text2 text-xs mt-1">{athlete.position || '—'}</div>
+                        </div>
+                        <div className="text-ember font-mono text-lg">{athlete.fitness_score ?? 0}</div>
+                      </div>
+                      <div className="text-text2 text-sm">
+                        {[athlete.city, athlete.state].filter(Boolean).join(', ') || 'Location not listed'}
+                      </div>
+                      {athlete.headline ? <div className="text-text2 text-sm">{athlete.headline}</div> : null}
+                      <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded border ${athlete.is_open ? 'border-lime/20 bg-lime/10 text-lime' : 'border-edge bg-background text-text2'}`}>
+                          {athlete.is_open ? 'Open to opportunities' : 'Private'}
+                        </span>
+                        <Link to={`/athletes/${athlete.id}`} className="text-lime text-xs font-bold uppercase tracking-wide hover:underline">
+                          View Profile
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : pipelineQ.isLoading ? (
             <div className="text-text2">Loading pipeline…</div>
-          ) : shortlistsQ.isError ? (
+          ) : pipelineQ.isError ? (
             <div className="text-ember">
-              {shortlistsQ.error?.response?.data?.error || 'Failed to load pipeline'}
+              {pipelineQ.error?.response?.data?.error || 'Failed to load pipeline'}
             </div>
           ) : (
             <PipelineBoard
-              rows={rows}
-              onUpdateStage={(athleteId, stage) => upsertM.mutate({ athleteId, stage })}
+              rows={pipelineRows}
+              onUpdateStage={(applicationId, stage) => upsertM.mutate({ applicationId, stage })}
             />
           )}
         </div>
@@ -155,4 +351,3 @@ export default function ClubDashboard() {
     </div>
   )
 }
-

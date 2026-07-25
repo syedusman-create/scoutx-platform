@@ -10,9 +10,10 @@ const opportunityRoutes = require('./routes/opportunity.routes')
 const feedRoutes = require('./routes/feed.routes')
 const messageRoutes = require('./routes/message.routes')
 const adminRoutes = require('./routes/admin.routes')
-const integrationRoutes = require('./routes/integration.routes')
-const socialRoutes = require('./routes/social.routes')
 const uploadsRoutes = require('./routes/uploads.routes')
+const challengeRoutes = require('./routes/challenge.routes')
+const leaderboardRoutes = require('./routes/leaderboard.routes')
+const achievementRoutes = require('./routes/achievement.routes')
 
 const app = express()
 
@@ -49,9 +50,10 @@ app.use('/api/opportunities', opportunityRoutes)
 app.use('/api/feed', feedRoutes)
 app.use('/api/messages', messageRoutes)
 app.use('/api/admin', adminRoutes)
-app.use('/api/integrations', integrationRoutes)
-app.use('/api/social', socialRoutes)
 app.use('/api/uploads', uploadsRoutes)
+app.use('/api/challenges', challengeRoutes)
+app.use('/api/leaderboards', leaderboardRoutes)
+app.use('/api/achievements', achievementRoutes)
 
 // 404 handler
 app.use((req, res) => {

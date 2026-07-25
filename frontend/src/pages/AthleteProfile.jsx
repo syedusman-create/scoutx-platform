@@ -1,16 +1,16 @@
 import React, { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import ProfileHero from '../components/athlete/ProfileHero.jsx'
 import CareerTimeline from '../components/athlete/CareerTimeline.jsx'
 import FitnessPanel from '../components/athlete/FitnessPanel.jsx'
-import SkillsPanel from '../components/athlete/SkillsPanel.jsx'
-import HighlightReel from '../components/athlete/HighlightReel.jsx'
+import StrengthsPanel from '../components/athlete/SkillsPanel.jsx'
 
 import { useAthleteCareer, useAthleteFitness, useAthleteProfile } from '../hooks/useAthletes'
 import useAuth from '../hooks/useAuth'
 import { updateMyAthleteApi } from '../api/athlete.api'
+import { supabase } from '../api/supabase.js'
 
 // ── Skeleton ──────────────────────────────────────────────────
 function ProfileSkeleton() {
@@ -195,6 +195,72 @@ function EditModal({ athlete, onClose, onSave, isSaving }) {
   )
 }
 
+function ProfessionalRecord({ athlete, careerEntries }) {
+  const totalMatches = careerEntries?.reduce((sum, entry) => sum + (entry.matches || 0), 0) || athlete?.total_matches || 0
+  const totalGoals = careerEntries?.reduce((sum, entry) => sum + (entry.goals || 0), 0) || athlete?.total_goals || 0
+  const totalAssists = careerEntries?.reduce((sum, entry) => sum + (entry.assists || 0), 0) || athlete?.total_assists || 0
+  const totalCleanSheets = careerEntries?.reduce((sum, entry) => sum + (entry.clean_sheets || 0), 0) || 0
+
+  return (
+    <div className="bg-lift border border-edge rounded-xl p-5">
+      <div className="text-text3 text-xs font-bold tracking-widest uppercase mb-4 flex items-center gap-2">
+        <span className="w-1 h-4 rounded-full bg-lime inline-block" />
+        Professional Performance Record
+      </div>
+      
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+        <div className="bg-raised border border-edge rounded-lg p-3">
+          <div className="text-text3 text-[10px] uppercase font-bold tracking-wide">Total Matches</div>
+          <div className="text-2xl font-bold text-text1 mt-1">{totalMatches}</div>
+        </div>
+        <div className="bg-raised border border-edge rounded-lg p-3">
+          <div className="text-text3 text-[10px] uppercase font-bold tracking-wide">Goals Scored</div>
+          <div className="text-2xl font-bold text-lime mt-1">{totalGoals}</div>
+        </div>
+        <div className="bg-raised border border-edge rounded-lg p-3">
+          <div className="text-text3 text-[10px] uppercase font-bold tracking-wide">Total Assists</div>
+          <div className="text-2xl font-bold text-ice mt-1">{totalAssists}</div>
+        </div>
+        <div className="bg-raised border border-edge rounded-lg p-3">
+          <div className="text-text3 text-[10px] uppercase font-bold tracking-wide">Clean Sheets</div>
+          <div className="text-2xl font-bold text-text2 mt-1">{totalCleanSheets}</div>
+        </div>
+      </div>
+
+      {careerEntries && careerEntries.length > 0 && (
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-edge text-text3 font-semibold uppercase tracking-wider">
+                <th className="py-2">Club</th>
+                <th className="py-2">Competition</th>
+                <th className="py-2 text-center">App</th>
+                <th className="py-2 text-center">G</th>
+                <th className="py-2 text-center">A</th>
+                <th className="py-2 text-center">Rating</th>
+              </tr>
+            </thead>
+            <tbody>
+              {careerEntries.map((entry) => (
+                <tr key={entry.id} className="border-b border-edge/30 text-text1 hover:bg-raised/40 transition-colors">
+                  <td className="py-3 font-medium">{entry.club_name}</td>
+                  <td className="py-3 text-text2">{entry.competition || 'League'}</td>
+                  <td className="py-3 text-center">{entry.matches}</td>
+                  <td className="py-3 text-center text-lime font-semibold">{entry.goals}</td>
+                  <td className="py-3 text-center text-ice">{entry.assists}</td>
+                  <td className="py-3 text-center font-mono font-bold text-amber">
+                    {entry.avg_rating ? Number(entry.avg_rating).toFixed(2) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────
 export default function AthleteProfile() {
   const { id } = useParams()
@@ -211,6 +277,64 @@ export default function AthleteProfile() {
   const athlete = profileQ.data
   const canEdit = Boolean(user?.role === 'athlete' && athlete?.user_id && user?.id === athlete?.user_id)
   const canMessage = !canEdit && athlete?.user_id
+
+  const followsQ = useQuery({
+    queryKey: ['athlete-follows', athlete?.user_id],
+    enabled: Boolean(athlete?.user_id),
+    queryFn: async () => {
+      const { count: followersCount, error: err1 } = await supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('following_id', athlete.user_id)
+      
+      if (err1) throw err1
+
+      const { count: followingCount, error: err2 } = await supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('follower_id', athlete.user_id)
+      
+      if (err2) throw err2
+
+      let isFollowing = false
+      if (user?.id) {
+        const { data } = await supabase
+          .from('follows')
+          .select('id')
+          .eq('follower_id', user.id)
+          .eq('following_id', athlete.user_id)
+          .maybeSingle()
+        isFollowing = Boolean(data)
+      }
+
+      return { followersCount: followersCount || 0, followingCount: followingCount || 0, isFollowing }
+    }
+  })
+
+  const followM = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error('Not logged in')
+      if (followsQ.data?.isFollowing) {
+        const { error } = await supabase
+          .from('follows')
+          .delete()
+          .eq('follower_id', user.id)
+          .eq('following_id', athlete.user_id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('follows')
+          .insert({
+            follower_id: user.id,
+            following_id: athlete.user_id
+          })
+        if (error) throw error
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['athlete-follows', athlete?.user_id] })
+    }
+  })
 
   const saveM = useMutation({
     mutationFn: updateMyAthleteApi,
@@ -268,7 +392,14 @@ export default function AthleteProfile() {
       <div className="flex flex-col gap-4">
 
         {/* Hero */}
-        <ProfileHero athlete={athlete} />
+        <ProfileHero
+          athlete={athlete}
+          followersCount={followsQ.data?.followersCount || 0}
+          followingCount={followsQ.data?.followingCount || 0}
+          isFollowing={followsQ.data?.isFollowing || false}
+          onFollowToggle={() => followM.mutate()}
+          showFollowButton={!canEdit && Boolean(athlete?.user_id)}
+        />
 
         {/* Action bar */}
         <div className="flex items-center gap-3 flex-wrap">
@@ -288,9 +419,15 @@ export default function AthleteProfile() {
               💬 Message
             </Link>
           )}
-          {!canEdit && (
-            <button className="px-4 py-2 rounded-lg bg-lift border border-edge text-text1 text-sm font-semibold hover:border-line transition-all flex items-center gap-2">
-              + Connect
+          {!canEdit && athlete?.user_id && (
+            <button
+              onClick={() => followM.mutate()}
+              disabled={followM.isPending}
+              className={`px-4 py-2 rounded-lg text-sm font-bold uppercase transition-all flex items-center gap-2 border ${
+                followsQ.data?.isFollowing ? 'bg-edge text-text2 border-line' : 'bg-lime text-background hover:brightness-110'
+              }`}
+            >
+              {followsQ.data?.isFollowing ? 'Following' : 'Follow'}
             </button>
           )}
           {athlete?.is_open && (
@@ -321,8 +458,8 @@ export default function AthleteProfile() {
               </div>
             )}
 
+            <ProfessionalRecord athlete={athlete} careerEntries={careerQ.data || []} />
             <CareerTimeline entries={careerQ.data || []} isLoading={careerQ.isLoading} />
-            <HighlightReel />
           </div>
 
           {/* Right: fitness + skills + details */}
@@ -368,7 +505,7 @@ export default function AthleteProfile() {
               tests={fitnessQ.data || []}
               isLoading={fitnessQ.isLoading}
             />
-            <SkillsPanel skills={[]} />
+            <StrengthsPanel strengths={athlete?.strengths ? String(athlete.strengths).split(',').map(s => s.trim()) : (athlete?.position ? [athlete.position, `${athlete.preferred_foot || 'Right'} Foot`] : [])} />
           </div>
         </div>
       </div>

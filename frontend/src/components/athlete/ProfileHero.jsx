@@ -9,7 +9,14 @@ const Metric = ({ label, value, tone = 'text-text1' }) => {
   )
 }
 
-export default function ProfileHero({ athlete }) {
+export default function ProfileHero({
+  athlete,
+  followersCount = 0,
+  followingCount = 0,
+  isFollowing = false,
+  onFollowToggle,
+  showFollowButton = false
+}) {
   if (!athlete) return null
 
   const verified = Boolean(athlete.user_is_verified)
@@ -54,6 +61,26 @@ export default function ProfileHero({ athlete }) {
           </div>
 
           <div className="mt-2 text-text2">{athlete.headline || `${athlete.position || 'Player'} • ${athlete.city || ''} ${athlete.state || ''}`}</div>
+
+          <div className="flex gap-4 mt-2.5 text-xs text-text3">
+            <div>
+              <span className="text-text1 font-bold">{followersCount}</span> followers
+            </div>
+            <div>
+              <span className="text-text1 font-bold">{followingCount}</span> following
+            </div>
+          </div>
+
+          {showFollowButton && (
+            <button
+              onClick={onFollowToggle}
+              className={`mt-3 px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all duration-150 ${
+                isFollowing ? 'bg-edge text-text2 border border-line' : 'bg-lime text-background hover:brightness-110'
+              }`}
+            >
+              {isFollowing ? 'Following' : 'Follow'}
+            </button>
+          )}
 
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <Metric label="Fitness Score" value={athlete.fitness_score ?? 0} tone="text-ember" />

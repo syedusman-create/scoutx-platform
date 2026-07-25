@@ -1,6 +1,6 @@
 import React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getAdminOverviewApi } from '../../api/admin.api'
+import { supabase } from '../../api/supabase.js'
 
 const MetricCard = ({ label, value }) => (
   <div className="bg-surface border border-edge rounded-xl p-4">
@@ -12,7 +12,23 @@ const MetricCard = ({ label, value }) => (
 export default function AdminOverview() {
   const overviewQ = useQuery({
     queryKey: ['admin-overview'],
-    queryFn: async () => (await getAdminOverviewApi()).data.data
+    queryFn: async () => {
+      const { count: usersCount } = await supabase.from('users').select('*', { count: 'exact', head: true })
+      const { count: athletesCount } = await supabase.from('athlete_profiles').select('*', { count: 'exact', head: true })
+      const { count: clubsCount } = await supabase.from('club_profiles').select('*', { count: 'exact', head: true })
+      const { count: oppsCount } = await supabase.from('opportunities').select('*', { count: 'exact', head: true })
+      const { count: postsCount } = await supabase.from('posts').select('*', { count: 'exact', head: true })
+      const { count: appsCount } = await supabase.from('applications').select('*', { count: 'exact', head: true })
+      
+      return {
+        users_count: usersCount || 0,
+        athletes_count: athletesCount || 0,
+        clubs_count: clubsCount || 0,
+        opportunities_count: oppsCount || 0,
+        posts_count: postsCount || 0,
+        applications_count: appsCount || 0
+      }
+    }
   })
 
   const o = overviewQ.data || {}

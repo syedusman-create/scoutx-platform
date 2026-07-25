@@ -9,7 +9,7 @@ const { getClubProfile, getMyClubProfile, updateClubProfile, updateMyClubProfile
 
 router.get('/me', auth, requireRole('club'), getMyClubProfile)
 router.put('/me', auth, requireRole('club', 'admin'), updateMyClubProfile)
-router.get('/:id', auth, requireRole('athlete', 'club', 'scout', 'admin'), getClubProfile)
+router.get('/:id', getClubProfile)
 router.put('/:id', auth, requireRole('club', 'admin'), updateClubProfile)
 
 module.exports = router

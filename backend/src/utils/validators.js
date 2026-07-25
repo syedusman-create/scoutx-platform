@@ -99,6 +99,27 @@ const fitnessTestUpdateSchema = Joi.object({
   notes: Joi.string().max(2000).allow(null, '')
 }).min(1)
 
+const fitnessAssessmentUploadSchema = Joi.object({
+  exercise_type: Joi.string().min(2).max(80).required(),
+  athlete_id: Joi.string().uuid().optional()
+})
+
+const fitnessAssessmentCallbackSchema = Joi.object({
+  assessmentId: Joi.string().uuid().required(),
+  exerciseType: Joi.string().min(2).max(80).required(),
+  repCount: Joi.number().integer().min(0).default(0),
+  totalReps: Joi.number().integer().min(0),
+  formScore: Joi.number().min(0).max(100).required(),
+  averageFormScore: Joi.number().min(0).max(100),
+  keyMetrics: Joi.object().unknown(true).default({}),
+  analysisResults: Joi.array().items(Joi.object().unknown(true)).default([]),
+  repDetectionEvents: Joi.array().items(Joi.object().unknown(true)).default([]),
+  videoDuration: Joi.number().integer().min(0),
+  timestamp: Joi.date().optional(),
+  status: Joi.string().valid('completed', 'failed').default('completed'),
+  error: Joi.string().allow('', null)
+})
+
 const opportunityCreateSchema = Joi.object({
   title: Joi.string().min(1).max(255).required(),
   position: Joi.string().min(1).max(100).allow(null, ''),
@@ -156,6 +177,8 @@ module.exports = {
   clubProfileUpdateSchema,
   fitnessTestCreateSchema,
   fitnessTestUpdateSchema,
+  fitnessAssessmentUploadSchema,
+  fitnessAssessmentCallbackSchema,
   opportunityCreateSchema,
   opportunityUpdateSchema,
   applicationStatusUpdateSchema,

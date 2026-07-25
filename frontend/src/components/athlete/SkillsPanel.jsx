@@ -2,24 +2,28 @@ import React from 'react'
 
 const Tag = ({ children }) => {
   return (
-    <span className="inline-flex items-center px-2 py-1 rounded-md bg-raised border border-edge text-text1 text-xs">
-      {children}
+    <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-raised border border-edge text-lime font-semibold text-xs tracking-wide shadow-sm">
+      ⚡ {children}
     </span>
   )
 }
 
-export default function SkillsPanel({ skills = [] }) {
+export default function StrengthsPanel({ strengths = [] }) {
   return (
-    <div className="bg-surface border border-edge rounded-xl p-5">
-      <div className="text-display text-2xl tracking-wide">Skills</div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {skills.length === 0 ? (
-          <div className="text-text2 text-sm">Skills & endorsements (Phase 4/6).</div>
+    <div className="bg-lift border border-edge rounded-xl p-5">
+      <div className="text-text3 text-xs font-bold tracking-widest uppercase mb-3 flex items-center gap-2">
+        <span className="w-1 h-4 rounded-full bg-lime inline-block" />
+        Key Strengths
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {strengths.length === 0 ? (
+          <div className="text-text2 text-xs italic">No strengths listed yet.</div>
         ) : (
-          skills.map((s) => <Tag key={s}>{s}</Tag>)
+          strengths.map((s) => <Tag key={s}>{s}</Tag>)
         )}
       </div>
     </div>
   )
 }
+
 

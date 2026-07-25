@@ -1,6 +1,9 @@
 const AthleteModel = require('../models/athlete.model')
 const FitnessModel = require('../models/fitness.model')
 const { fitnessTestCreateSchema, fitnessTestUpdateSchema, validate } = require('../utils/validators')
+const ChallengeService = require('../services/challenge.service')
+const LeaderboardService = require('../services/leaderboard.service')
+const AchievementService = require('../services/achievement.service')
 
 const getFitnessTests = async (req, res) => {
   try {
@@ -43,6 +46,26 @@ const createFitnessTest = async (req, res) => {
       certifiedBy: role === 'athlete' ? null : userId
     })
 
+    const athlete = await AthleteModel.getAthleteById(athleteId)
+    if (athlete?.user_id) {
+      await ChallengeService.updateProgressForAssessment({
+        userId: athlete.user_id,
+        exerciseType: value.test_type,
+        repCount: Number(value.score) || 0,
+        formScore: Number(value.score) || 0
+      })
+      await LeaderboardService.updateLeaderboardForAssessment({
+        userId: athlete.user_id,
+        exerciseType: value.test_type,
+        repCount: Number(value.score) || 0,
+        formScore: Number(value.score) || 0
+      })
+      await AchievementService.evaluateForAssessment({
+        userId: athlete.user_id,
+        formScore: Number(value.score) || 0
+      })
+    }
+
     return res.json({
       success: true,
       data: { ...result, athlete_id: athleteId },
@@ -75,6 +98,30 @@ const updateFitnessTest = async (req, res) => {
     }
 
     if (!result) return res.status(404).json({ success: false, error: 'Fitness test not found' })
+
+    const athleteId = result?.test?.athlete_id || result?.athlete_id
+    if (athleteId) {
+      const athlete = await AthleteModel.getAthleteById(athleteId)
+      const scoreVal = Number(value.score ?? result?.test?.score ?? result?.score ?? 0) || 0
+      if (athlete?.user_id) {
+        await ChallengeService.updateProgressForAssessment({
+          userId: athlete.user_id,
+          exerciseType: value.test_type || result?.test?.test_type || 'fitness',
+          repCount: scoreVal,
+          formScore: scoreVal
+        })
+        await LeaderboardService.updateLeaderboardForAssessment({
+          userId: athlete.user_id,
+          exerciseType: value.test_type || result?.test?.test_type || 'fitness',
+          repCount: scoreVal,
+          formScore: scoreVal
+        })
+        await AchievementService.evaluateForAssessment({
+          userId: athlete.user_id,
+          formScore: scoreVal
+        })
+      }
+    }
 
     return res.json({ success: true, data: result, message: 'Fitness test updated' })
   } catch (err) {

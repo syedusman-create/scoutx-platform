@@ -31,7 +31,15 @@ export default function FitnessPanel({ fitnessScore = 0, tests = [] }) {
           ))
         )}
       </div>
+
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="rounded-xl border border-edge bg-background px-3 py-2 text-xs text-text2">
+          Fitness tests here feed the profile and leaderboard calculations.
+        </div>
+        <div className="rounded-xl border border-edge bg-background px-3 py-2 text-xs text-text2">
+          Compare athletes on the leaderboards page.
+        </div>
+      </div>
     </div>
   )
 }
-

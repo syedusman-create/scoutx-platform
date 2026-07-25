@@ -38,7 +38,7 @@ const Card = ({ row, onUpdateStage }) => {
 
         <select
           value={row.stage}
-          onChange={(e) => onUpdateStage(row.athlete_id, e.target.value)}
+          onChange={(e) => onUpdateStage(row.id, e.target.value)}
           className="rounded-md bg-surface border border-edge px-2 py-1 text-text1 text-xs outline-none focus:border-lime"
         >
           {STAGES.map((s) => (
@@ -77,4 +77,3 @@ export default function PipelineBoard({ rows = [], onUpdateStage }) {
     </div>
   )
 }
-

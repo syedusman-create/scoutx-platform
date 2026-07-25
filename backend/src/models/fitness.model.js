@@ -126,10 +126,52 @@ const updateFitnessTestAndRecalculateForOwner = async ({ testId, userId, updates
   return { test: updated, fitness_score: newScore }
 }
 
+const createFitnessTestFromAssessmentAndRecalculate = async ({
+  athleteId,
+  exerciseType,
+  formScore,
+  repCount,
+  testedAt,
+  notes
+}) => {
+  const testType = `${exerciseType} Form Score`
+  const result = await pool.query(
+    `INSERT INTO fitness_tests (athlete_id, test_type, score, unit, tested_at, location, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING *`,
+    [
+      athleteId,
+      testType,
+      Number(formScore),
+      '/100',
+      testedAt || new Date(),
+      'AI Assessment',
+      notes || `Rep Count: ${Number(repCount || 0)}`
+    ]
+  )
+
+  const testsRes = await pool.query(
+    `SELECT test_type, score
+     FROM fitness_tests
+     WHERE athlete_id = $1`,
+    [athleteId]
+  )
+  const newScore = calculateFitnessScore(testsRes.rows || [])
+  await pool.query(
+    `UPDATE athlete_profiles
+     SET fitness_score = $1
+     WHERE id = $2`,
+    [newScore, athleteId]
+  )
+
+  return { created: result.rows[0], fitness_score: newScore }
+}
+
 module.exports = {
   getFitnessTestsByAthleteId,
   createFitnessTestAndRecalculate,
   updateFitnessTestForAdmin,
-  updateFitnessTestAndRecalculateForOwner
+  updateFitnessTestAndRecalculateForOwner,
+  createFitnessTestFromAssessmentAndRecalculate
 }
 

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { listAdminUsersApi, updateAdminUserRoleApi } from '../../api/admin.api'
+import { supabase } from '../../api/supabase.js'
 
 export default function AdminUsers() {
   const qc = useQueryClient()
@@ -8,7 +8,14 @@ export default function AdminUsers() {
 
   const usersQ = useQuery({
     queryKey: ['admin-users'],
-    queryFn: async () => (await listAdminUsersApi({ limit: 100 })).data.data || [],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data || []
+    },
     enabled: true
   })
 
@@ -20,7 +27,15 @@ export default function AdminUsers() {
   }, [query, users])
 
   const roleM = useMutation({
-    mutationFn: updateAdminUserRoleApi,
+    mutationFn: async ({ userId, role }) => {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ role })
+        .eq('id', userId)
+        .select()
+      if (error) throw error
+      return data
+    },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['admin-users'] })
     }

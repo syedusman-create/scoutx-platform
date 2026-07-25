@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native'
 import useMobileStore from '../store/index.js'
-import { login } from '../api/index.js'
+import { supabase } from '../api/supabase.js'
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('')
@@ -16,17 +16,28 @@ export default function LoginScreen() {
 
     setLoading(true)
     try {
-      const response = await login({ email, password })
-      if (response.data?.success) {
-        const { token, user } = response.data.data
-        setAuth(user, token)
-      } else {
-        Alert.alert('Login failed', response.data?.error || 'Could not log in.')
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
+
+      const { data: dbUser, error: dbError } = await supabase
+        .from('users')
+        .select('role, is_verified')
+        .eq('id', data.user.id)
+        .single()
+
+      if (dbError) throw dbError
+
+      const fullUser = {
+        id: data.user.id,
+        email: data.user.email,
+        role: dbUser?.role || 'athlete',
+        is_verified: dbUser?.is_verified || false
       }
+
+      setAuth(fullUser, data.session.access_token)
     } catch (err) {
       console.error('Login error', err)
-      const message = err?.response?.data?.error || err?.message || 'Login error'
-      Alert.alert('Login failed', message)
+      Alert.alert('Login failed', err.message || 'Login error')
     } finally {
       setLoading(false)
     }

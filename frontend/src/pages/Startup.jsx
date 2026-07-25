@@ -3,9 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
 import { useAuth } from '../context/AuthContext.jsx'
-import { getMyAthleteApi, updateMyAthleteApi, createCareerApi, createFitnessTestApi } from '../api/athlete.api'
-import { getMyClubApi, updateMyClubApi } from '../api/club.api'
 import { SPORT_OPTIONS } from '../constants/sports.js'
+import { supabase } from '../api/supabase.js'
 
 const getRedirectPath = (role) => (role === 'club' ? '/club/dashboard' : '/feed')
 
@@ -33,73 +32,86 @@ const toDateInputValue = (value) => {
   return parsed.toISOString().slice(0, 10)
 }
 
-const fitnessTestTypes = [
-  { value: 'Sprint 40m', label: 'Sprint 40m (seconds)' },
-  { value: 'VO2 Max', label: 'VO2 Max (ml/kg/min)' },
-  { value: 'Illinois Agility', label: 'Illinois Agility (seconds)' },
-  { value: 'Vertical Jump', label: 'Vertical Jump (cm)' },
-  { value: 'Yo-Yo Test', label: 'Yo-Yo Test (level/value)' }
-]
-
 export default function Startup() {
   const { user } = useAuth()
   const role = user?.role
   const navigate = useNavigate()
   const location = useLocation()
 
+  const stepStorageKey = React.useMemo(() => {
+    if (!user?.id) return null
+    return `scoutx:onboarding-step:${user.id}`
+  }, [user?.id])
+
   const scaffoldQ = useQuery({
-    queryKey: ['startup-page-scaffold', role],
-    enabled: role === 'athlete' || role === 'club',
+    queryKey: ['startup-page-scaffold', role, user?.id],
+    enabled: Boolean((role === 'athlete' || role === 'club') && user?.id),
     queryFn: async () => {
-      if (role === 'athlete') return (await getMyAthleteApi()).data?.data
-      return (await getMyClubApi()).data?.data
+      if (role === 'athlete') {
+        const { data, error } = await supabase
+          .from('athlete_profiles')
+          .select('id, user_id, full_name, sport, position, city, state, date_of_birth, gender, preferred_foot, height_cm, weight_kg, bio, headline, strengths, avatar_url, is_open')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        if (error) throw error
+        return data
+      }
+
+      const { data, error } = await supabase
+        .from('club_profiles')
+        .select('id, user_id, club_name, league, city, state, founded_year, logo_url, bio, is_verified')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (error) throw error
+      return data
     }
   })
+
+  const scaffold = scaffoldQ.data || null
+  const isReady = Boolean(role && scaffoldQ.isSuccess)
+  const steps = role === 'club' ? ['Basics', 'Review'] : ['Basics', 'History', 'Review']
 
   const [step, setStep] = React.useState(0)
   const [savingBasics, setSavingBasics] = React.useState(false)
   const [submittingAll, setSubmittingAll] = React.useState(false)
   const [errorMsg, setErrorMsg] = React.useState('')
-
   const [athleteId, setAthleteId] = React.useState(null)
   const [clubSaved, setClubSaved] = React.useState(false)
-
-  const scaffold = scaffoldQ.data || null
-  const isReady = Boolean(role && scaffold)
+  const [athleteForm, setAthleteForm] = React.useState(null)
+  const [clubForm, setClubForm] = React.useState(null)
+  const [careerEntries, setCareerEntries] = React.useState([])
 
   React.useEffect(() => {
-    if (!scaffoldQ.data) return
-    if (scaffoldQ.data.exists) {
+    if (!stepStorageKey) return
+    const savedStep = Number(window.sessionStorage.getItem(stepStorageKey))
+    if (Number.isInteger(savedStep) && savedStep >= 0) setStep(savedStep)
+  }, [stepStorageKey])
+
+  React.useEffect(() => {
+    if (!stepStorageKey) return
+    window.sessionStorage.setItem(stepStorageKey, String(step))
+  }, [step, stepStorageKey])
+
+  React.useEffect(() => {
+    if (user?.onboarding_completed) {
       const redirectPath = getRedirectPath(role)
       if (location.pathname !== redirectPath) navigate(redirectPath, { replace: true })
     }
-  }, [scaffoldQ.data, navigate, role, location.pathname])
+  }, [user?.onboarding_completed, navigate, role, location.pathname])
 
   React.useEffect(() => {
     if (!isReady) return
-    if (role === 'athlete') setAthleteForm(buildAthleteDefaults(scaffold))
-    else setClubForm(buildClubDefaults(scaffold))
+    if (role === 'athlete') setAthleteForm(buildAthleteDefaults(scaffold, user))
+    else setClubForm(buildClubDefaults(scaffold, user))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReady])
-
-  const [athleteForm, setAthleteForm] = React.useState(null)
-  const [clubForm, setClubForm] = React.useState(null)
-
-  const steps = role === 'club' ? ['Basics', 'Review'] : ['Basics', 'History', 'Fitness', 'Review']
-
-  const [careerEntries, setCareerEntries] = React.useState([])
-  const [fitnessTests, setFitnessTests] = React.useState([])
 
   const canProceed = React.useMemo(() => {
     if (!athleteForm && role === 'athlete') return false
     if (!clubForm && role === 'club') return false
     if (step === 0) {
       if (role === 'club') return Boolean(clubForm?.club_name && clubForm?.league && clubForm?.city && clubForm?.state)
-      return Boolean(
-        athleteForm?.full_name &&
-          athleteForm?.sport &&
-          athleteForm?.date_of_birth
-      )
+      return Boolean(athleteForm?.full_name && athleteForm?.sport && athleteForm?.date_of_birth)
     }
     return true
   }, [athleteForm, clubForm, role, step])
@@ -112,18 +124,24 @@ export default function Startup() {
     try {
       if (role === 'athlete') {
         const payload = sanitizeAthletePayload(athleteForm)
-        const resp = await updateMyAthleteApi(payload)
-        const next = resp.data?.data
-        if (!next?.id) throw new Error('Athlete profile was not created.')
-        setAthleteId(next.id)
+        const { data, error } = await supabase
+          .from('athlete_profiles')
+          .upsert({ user_id: user.id, ...payload }, { onConflict: 'user_id' })
+          .select()
+        if (error) throw error
+        if (!data || !data[0]?.id) throw new Error('Athlete profile was not created.')
+        setAthleteId(data[0].id)
       } else {
         const payload = sanitizeClubPayload(clubForm)
-        await updateMyClubApi(payload)
+        const { error } = await supabase
+          .from('club_profiles')
+          .upsert({ user_id: user.id, ...payload }, { onConflict: 'user_id' })
+        if (error) throw error
         setClubSaved(true)
       }
-      setStep((s) => s + 1)
+      setStep(1)
     } catch (e) {
-      setErrorMsg(e?.response?.data?.error || e?.message || 'Unable to save basics')
+      setErrorMsg(e.message || 'Unable to save basics')
     } finally {
       setSavingBasics(false)
     }
@@ -135,18 +153,37 @@ export default function Startup() {
     try {
       if (role === 'athlete') {
         if (!athleteId) throw new Error('Athlete profile is missing. Save basics first.')
-        for (const entry of careerEntries) {
-          if (!entry.club_name || !entry.competition || !entry.start_date) continue
-          await createCareerApi(athleteId, sanitizeCareerPayload(entry))
-        }
-        for (const test of fitnessTests) {
-          if (!test.test_type || test.score === '' || test.score === null) continue
-          await createFitnessTestApi(athleteId, sanitizeFitnessPayload(test))
+
+        const careerPayloads = careerEntries
+          .filter((entry) => entry.club_name && entry.competition && entry.start_date)
+          .map((entry) => ({
+            athlete_id: athleteId,
+            club_name: entry.club_name,
+            competition: entry.competition,
+            matches: entry.matches ? Number(entry.matches) : 0,
+            goals: entry.goals ? Number(entry.goals) : 0,
+            assists: entry.assists ? Number(entry.assists) : 0,
+            clean_sheets: entry.clean_sheets ? Number(entry.clean_sheets) : 0,
+            start_date: entry.start_date,
+            end_date: entry.end_date || null
+          }))
+
+        if (careerPayloads.length > 0) {
+          const { error } = await supabase.from('career_entries').insert(careerPayloads)
+          if (error) throw error
         }
       }
+
+      const { error: accountCompleteError } = await supabase
+        .from('users')
+        .update({ onboarding_completed: true })
+        .eq('id', user.id)
+      if (accountCompleteError) throw accountCompleteError
+
+      if (stepStorageKey) window.sessionStorage.removeItem(stepStorageKey)
       navigate(getRedirectPath(role), { replace: true })
     } catch (e) {
-      setErrorMsg(e?.response?.data?.error || e?.message || 'Unable to complete onboarding')
+      setErrorMsg(e.message || 'Unable to complete onboarding')
     } finally {
       setSubmittingAll(false)
     }
@@ -163,7 +200,7 @@ export default function Startup() {
   if (scaffoldQ.isLoading || !isReady) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-text2">Loading onboarding…</div>
+        <div className="text-text2">Loading onboarding...</div>
       </div>
     )
   }
@@ -183,10 +220,10 @@ export default function Startup() {
           <div className="flex items-start gap-3">
             <img src="/scoutx-logo.png" alt="ScoutX logo" className="h-12 w-12 object-contain" />
             <div>
-            <div className="text-display text-3xl tracking-wide">Startup Wizard</div>
-            <div className="text-text2 text-sm mt-1">
-              Step {step + 1} of {steps.length} • {steps[step]}
-            </div>
+              <div className="text-display text-3xl tracking-wide">Startup Wizard</div>
+              <div className="text-text2 text-sm mt-1">
+                Step {step + 1} of {steps.length} • {steps[step]}
+              </div>
             </div>
           </div>
           <div className="rounded-xl border border-edge bg-background px-4 py-2">
@@ -216,32 +253,30 @@ export default function Startup() {
       ) : (
         <AthleteWizard
           step={step}
-          steps={steps}
           athleteForm={athleteForm}
           careerEntries={careerEntries}
-          fitnessTests={fitnessTests}
           savingBasics={savingBasics}
           onChangeForm={setAthleteForm}
           onChangeCareer={setCareerEntries}
-          onChangeFitness={setFitnessTests}
           onBack={() => setStep((s) => Math.max(0, s - 1))}
           onNext={() => setStep((s) => Math.min(steps.length - 1, s + 1))}
           canProceed={canProceed}
           onSaveBasics={onSaveBasics}
           onFinish={onFinish}
           submittingAll={submittingAll}
-          athleteId={athleteId}
         />
       )}
     </div>
   )
 }
 
-function buildAthleteDefaults(scaffold) {
+function buildAthleteDefaults(scaffold, user) {
   return {
-    full_name: scaffold?.full_name || '',
+    full_name: scaffold?.full_name || user?.email?.split('@')[0] || '',
     sport: scaffold?.sport || 'football',
     position: scaffold?.position || '',
+    gender: scaffold?.gender || '',
+    strengths: scaffold?.strengths || '',
     city: scaffold?.city || '',
     state: scaffold?.state || '',
     date_of_birth: toDateInputValue(scaffold?.date_of_birth),
@@ -254,9 +289,9 @@ function buildAthleteDefaults(scaffold) {
   }
 }
 
-function buildClubDefaults(scaffold) {
+function buildClubDefaults(scaffold, user) {
   return {
-    club_name: scaffold?.club_name || '',
+    club_name: scaffold?.club_name || user?.email?.split('@')[0] || '',
     league: scaffold?.league || '',
     city: scaffold?.city || '',
     state: scaffold?.state || '',
@@ -271,6 +306,8 @@ function sanitizeAthletePayload(form) {
     full_name: form.full_name,
     sport: form.sport || 'football',
     position: form.position || undefined,
+    gender: form.gender || undefined,
+    strengths: form.strengths || undefined,
     city: form.city || undefined,
     state: form.state || undefined,
     preferred_foot: form.preferred_foot || undefined,
@@ -283,13 +320,12 @@ function sanitizeAthletePayload(form) {
   if (form.height_cm !== '' && form.height_cm !== null && form.height_cm !== undefined) payload.height_cm = Number(form.height_cm)
   if (form.weight_kg !== '' && form.weight_kg !== null && form.weight_kg !== undefined) payload.weight_kg = Number(form.weight_kg)
 
-  // Remove undefined keys for clean validation.
   Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k])
   return payload
 }
 
 function sanitizeClubPayload(form) {
-  const payload = {
+  return {
     club_name: form.club_name,
     league: form.league,
     city: form.city,
@@ -298,59 +334,21 @@ function sanitizeClubPayload(form) {
     logo_url: form.logo_url || null,
     bio: form.bio || null
   }
-  return payload
-}
-
-function sanitizeCareerPayload(entry) {
-  const payload = {
-    club_name: entry.club_name,
-    role: entry.role || null,
-    competition: entry.competition,
-    start_date: entry.start_date,
-    end_date: entry.end_date === '' ? null : entry.end_date,
-    matches: entry.matches === '' ? undefined : Number(entry.matches),
-    goals: entry.goals === '' ? undefined : Number(entry.goals),
-    assists: entry.assists === '' ? undefined : Number(entry.assists),
-    clean_sheets: entry.clean_sheets === '' ? undefined : Number(entry.clean_sheets),
-    pass_accuracy: entry.pass_accuracy === '' ? undefined : Number(entry.pass_accuracy),
-    avg_rating: entry.avg_rating === '' ? undefined : Number(entry.avg_rating),
-    is_verified: entry.is_verified ? true : undefined,
-    is_current: entry.is_current ? true : undefined
-  }
-  Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k])
-  return payload
-}
-
-function sanitizeFitnessPayload(test) {
-  const payload = {
-    test_type: test.test_type,
-    score: Number(test.score),
-    unit: test.unit || undefined,
-    tested_at: test.tested_at || undefined,
-    location: test.location || undefined,
-    notes: test.notes || undefined
-  }
-  Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k])
-  return payload
 }
 
 function AthleteWizard({
   step,
   athleteForm,
   careerEntries,
-  fitnessTests,
-  steps,
   savingBasics,
   onChangeForm,
   onChangeCareer,
-  onChangeFitness,
   onBack,
   onNext,
   canProceed,
   onSaveBasics,
   onFinish,
-  submittingAll,
-  athleteId
+  submittingAll
 }) {
   if (!athleteForm) return null
 
@@ -358,47 +356,52 @@ function AthleteWizard({
     <div className="flex flex-col gap-4">
       {step === 0 ? (
         <div className="bg-surface border border-edge rounded-xl p-5">
-          <div className="text-display text-2xl tracking-wide">Athlete basics</div>
+          <div className="flex items-center justify-between">
+            <div className="text-display text-2xl tracking-wide">Athlete Profile Setup</div>
+            <span className="text-xs font-bold text-lime bg-lime/10 border border-lime/20 px-3 py-1 rounded-full">
+              Athlete Specs
+            </span>
+          </div>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input className="rounded-md bg-raised border border-edge px-3 py-2" placeholder="Full name" value={athleteForm.full_name} onChange={(e) => onChangeForm((f) => ({ ...f, full_name: e.target.value }))} />
-            <select className="rounded-md bg-raised border border-edge px-3 py-2" value={athleteForm.sport} onChange={(e) => onChangeForm((f) => ({ ...f, sport: e.target.value }))}>
-              {SPORT_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
+            <input className="rounded-md bg-raised border border-edge px-3 py-2 text-sm" placeholder="Full name *" value={athleteForm.full_name} onChange={(e) => onChangeForm((f) => ({ ...f, full_name: e.target.value }))} />
+            <select className="rounded-md bg-raised border border-edge px-3 py-2 text-sm" value={athleteForm.sport} onChange={(e) => onChangeForm((f) => ({ ...f, sport: e.target.value }))}>
+              {SPORT_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
-
-            <input className="rounded-md bg-raised border border-edge px-3 py-2" placeholder="Position (optional)" value={athleteForm.position} onChange={(e) => onChangeForm((f) => ({ ...f, position: e.target.value }))} />
-            <select className="rounded-md bg-raised border border-edge px-3 py-2" value={athleteForm.preferred_foot} onChange={(e) => onChangeForm((f) => ({ ...f, preferred_foot: e.target.value }))}>
-              <option value="">Preferred foot</option>
-              <option value="left">Left</option>
-              <option value="right">Right</option>
-              <option value="both">Both</option>
+            <input className="rounded-md bg-raised border border-edge px-3 py-2 text-sm" placeholder="Position" value={athleteForm.position} onChange={(e) => onChangeForm((f) => ({ ...f, position: e.target.value }))} />
+            <select className="rounded-md bg-raised border border-edge px-3 py-2 text-sm" value={athleteForm.gender} onChange={(e) => onChangeForm((f) => ({ ...f, gender: e.target.value }))}>
+              <option value="">Select Gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
             </select>
-
-            <input type="date" className="rounded-md bg-raised border border-edge px-3 py-2" value={athleteForm.date_of_birth} onChange={(e) => onChangeForm((f) => ({ ...f, date_of_birth: e.target.value }))} />
-
-            <input className="rounded-md bg-raised border border-edge px-3 py-2" placeholder="City (optional)" value={athleteForm.city} onChange={(e) => onChangeForm((f) => ({ ...f, city: e.target.value }))} />
-            <input className="rounded-md bg-raised border border-edge px-3 py-2" placeholder="State (optional)" value={athleteForm.state} onChange={(e) => onChangeForm((f) => ({ ...f, state: e.target.value }))} />
-
-            <input type="number" className="rounded-md bg-raised border border-edge px-3 py-2" placeholder="Height cm (optional)" value={athleteForm.height_cm} onChange={(e) => onChangeForm((f) => ({ ...f, height_cm: e.target.value }))} />
-            <input type="number" className="rounded-md bg-raised border border-edge px-3 py-2" placeholder="Weight kg (optional)" value={athleteForm.weight_kg} onChange={(e) => onChangeForm((f) => ({ ...f, weight_kg: e.target.value }))} />
-
-            <input className="rounded-md bg-raised border border-edge px-3 py-2 md:col-span-2" placeholder="Headline (optional)" value={athleteForm.headline} onChange={(e) => onChangeForm((f) => ({ ...f, headline: e.target.value }))} />
-            <textarea className="rounded-md bg-raised border border-edge px-3 py-2 md:col-span-2 min-h-[90px]" placeholder="Bio (optional)" value={athleteForm.bio} onChange={(e) => onChangeForm((f) => ({ ...f, bio: e.target.value }))} />
-
+            <div>
+              <label className="block text-text3 text-[11px] font-semibold uppercase mb-1">Date of Birth *</label>
+              <input type="date" className="w-full rounded-md bg-raised border border-edge px-3 py-2 text-sm" value={athleteForm.date_of_birth} onChange={(e) => onChangeForm((f) => ({ ...f, date_of_birth: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-text3 text-[11px] font-semibold uppercase mb-1">Preferred Foot</label>
+              <select className="w-full rounded-md bg-raised border border-edge px-3 py-2 text-sm" value={athleteForm.preferred_foot} onChange={(e) => onChangeForm((f) => ({ ...f, preferred_foot: e.target.value }))}>
+                <option value="">Select Foot</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="both">Both</option>
+              </select>
+            </div>
+            <input className="rounded-md bg-raised border border-edge px-3 py-2 text-sm" placeholder="City" value={athleteForm.city} onChange={(e) => onChangeForm((f) => ({ ...f, city: e.target.value }))} />
+            <input className="rounded-md bg-raised border border-edge px-3 py-2 text-sm" placeholder="State" value={athleteForm.state} onChange={(e) => onChangeForm((f) => ({ ...f, state: e.target.value }))} />
+            <input type="number" className="rounded-md bg-raised border border-edge px-3 py-2 text-sm" placeholder="Height cm" value={athleteForm.height_cm} onChange={(e) => onChangeForm((f) => ({ ...f, height_cm: e.target.value }))} />
+            <input type="number" className="rounded-md bg-raised border border-edge px-3 py-2 text-sm" placeholder="Weight kg" value={athleteForm.weight_kg} onChange={(e) => onChangeForm((f) => ({ ...f, weight_kg: e.target.value }))} />
+            <input className="rounded-md bg-raised border border-edge px-3 py-2 text-sm md:col-span-2" placeholder="Key strengths" value={athleteForm.strengths} onChange={(e) => onChangeForm((f) => ({ ...f, strengths: e.target.value }))} />
+            <input className="rounded-md bg-raised border border-edge px-3 py-2 text-sm md:col-span-2" placeholder="Headline" value={athleteForm.headline} onChange={(e) => onChangeForm((f) => ({ ...f, headline: e.target.value }))} />
+            <textarea className="rounded-md bg-raised border border-edge px-3 py-2 text-sm md:col-span-2 min-h-[90px]" placeholder="Bio" value={athleteForm.bio} onChange={(e) => onChangeForm((f) => ({ ...f, bio: e.target.value }))} />
             <label className="inline-flex items-center gap-2 text-text2 text-sm md:col-span-2">
               <input type="checkbox" checked={Boolean(athleteForm.is_open)} onChange={(e) => onChangeForm((f) => ({ ...f, is_open: e.target.checked }))} className="accent-lime" />
-              Open to opportunities
+              Open to trial opportunities from scouts and clubs
             </label>
           </div>
-
           <div className="mt-4 flex justify-end gap-3">
-            <button
-              onClick={onSaveBasics}
-              disabled={!canProceed || savingBasics}
-              className="btn-primary text-xs"
-            >
-              {savingBasics ? 'Saving…' : 'Save basics & Continue'}
+            <button type="button" onClick={onSaveBasics} disabled={!canProceed || savingBasics} className="btn-primary text-xs">
+              {savingBasics ? 'Saving...' : 'Save basics & Continue'}
             </button>
           </div>
         </div>
@@ -407,22 +410,16 @@ function AthleteWizard({
       {step === 1 ? (
         <div className="bg-surface border border-edge rounded-xl p-5">
           <div className="text-display text-2xl tracking-wide">History & achievements</div>
-          <div className="mt-2 text-text2 text-sm">Add career entries (clubs, roles, competitions). You can add as many as you want.</div>
+          <div className="mt-2 text-text2 text-sm">Add career entries for clubs, roles, and competitions.</div>
 
           <div className="mt-4 space-y-3">
-            {careerEntries.length === 0 ? (
-              <div className="text-text2 text-sm">No entries yet. Add your first achievement below.</div>
-            ) : null}
+            {careerEntries.length === 0 ? <div className="text-text2 text-sm">No entries yet. Add your first achievement below.</div> : null}
 
             {careerEntries.map((entry, idx) => (
               <div key={idx} className="rounded-xl border border-edge bg-background p-4">
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <div className="text-text1 font-semibold text-sm">Entry {idx + 1}</div>
-                  <button
-                    type="button"
-                    onClick={() => onChangeCareer((prev) => prev.filter((_, i) => i !== idx))}
-                    className="text-ember text-xs font-bold"
-                  >
+                  <button type="button" onClick={() => onChangeCareer((prev) => prev.filter((_, i) => i !== idx))} className="text-ember text-xs font-bold">
                     Remove
                   </button>
                 </div>
@@ -443,26 +440,7 @@ function AthleteWizard({
 
             <button
               type="button"
-              onClick={() =>
-                onChangeCareer((prev) => [
-                  ...prev,
-                  {
-                    club_name: '',
-                    role: '',
-                    competition: '',
-                    start_date: '',
-                    end_date: '',
-                    matches: '',
-                    goals: '',
-                    assists: '',
-                    clean_sheets: '',
-                    pass_accuracy: '',
-                    avg_rating: '',
-                    is_verified: false,
-                    is_current: false
-                  }
-                ])
-              }
+              onClick={() => onChangeCareer((prev) => [...prev, { club_name: '', role: '', competition: '', start_date: '', end_date: '', matches: '', goals: '', assists: '', clean_sheets: '', pass_accuracy: '', avg_rating: '', is_verified: false, is_current: false }])}
               className="btn-ghost text-xs"
             >
               Add career entry
@@ -470,111 +448,16 @@ function AthleteWizard({
           </div>
 
           <div className="mt-4 flex justify-between gap-3">
-            <button onClick={onBack} className="btn-ghost text-xs">Back</button>
-            <button className="btn-primary text-xs" onClick={onNext}>Continue</button>
+            <button type="button" onClick={onBack} className="btn-ghost text-xs">Back</button>
+            <button type="button" className="btn-primary text-xs" onClick={onNext}>Continue</button>
           </div>
         </div>
       ) : null}
 
       {step === 2 ? (
         <div className="bg-surface border border-edge rounded-xl p-5">
-          <div className="text-display text-2xl tracking-wide">Fitness baseline</div>
-          <div className="mt-2 text-text2 text-sm">Add a few fitness tests. Fitness score will be recalculated after each test is saved.</div>
-
-          <div className="mt-4 space-y-3">
-            {fitnessTests.length === 0 ? (
-              <div className="text-text2 text-sm">No tests yet. Add your first test below.</div>
-            ) : null}
-
-            {fitnessTests.map((test, idx) => (
-              <div key={idx} className="rounded-xl border border-edge bg-background p-4">
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <div className="text-text1 font-semibold text-sm">Test {idx + 1}</div>
-                  <button
-                    type="button"
-                    onClick={() => onChangeFitness((prev) => prev.filter((_, i) => i !== idx))}
-                    className="text-ember text-xs font-bold"
-                  >
-                    Remove
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <select
-                    className="rounded-md bg-raised border border-edge px-3 py-2"
-                    value={test.test_type}
-                    onChange={(e) => onChangeFitness((prev) => prev.map((p, i) => (i === idx ? { ...p, test_type: e.target.value } : p)))}
-                  >
-                    <option value="">Select test type</option>
-                    {fitnessTestTypes.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                  </select>
-
-                  <input
-                    type="number"
-                    className="rounded-md bg-raised border border-edge px-3 py-2"
-                    placeholder="Score *"
-                    value={test.score}
-                    onChange={(e) => onChangeFitness((prev) => prev.map((p, i) => (i === idx ? { ...p, score: e.target.value } : p)))}
-                  />
-
-                  <input
-                    className="rounded-md bg-raised border border-edge px-3 py-2"
-                    placeholder="Unit (optional)"
-                    value={test.unit}
-                    onChange={(e) => onChangeFitness((prev) => prev.map((p, i) => (i === idx ? { ...p, unit: e.target.value } : p)))}
-                  />
-                  <input
-                    type="date"
-                    className="rounded-md bg-raised border border-edge px-3 py-2"
-                    value={test.tested_at}
-                    onChange={(e) => onChangeFitness((prev) => prev.map((p, i) => (i === idx ? { ...p, tested_at: e.target.value } : p)))}
-                  />
-
-                  <input
-                    className="rounded-md bg-raised border border-edge px-3 py-2 md:col-span-2"
-                    placeholder="Location (optional)"
-                    value={test.location}
-                    onChange={(e) => onChangeFitness((prev) => prev.map((p, i) => (i === idx ? { ...p, location: e.target.value } : p)))}
-                  />
-
-                  <textarea
-                    className="rounded-md bg-raised border border-edge px-3 py-2 md:col-span-2 min-h-[80px]"
-                    placeholder="Notes (optional)"
-                    value={test.notes}
-                    onChange={(e) => onChangeFitness((prev) => prev.map((p, i) => (i === idx ? { ...p, notes: e.target.value } : p)))}
-                  />
-                </div>
-              </div>
-            ))}
-
-            <button
-              type="button"
-              onClick={() =>
-                onChangeFitness((prev) => [
-                  ...prev,
-                  { test_type: '', score: '', unit: '', tested_at: '', location: '', notes: '' }
-                ])
-              }
-              className="btn-ghost text-xs"
-            >
-              Add fitness test
-            </button>
-          </div>
-
-          <div className="mt-4 flex justify-between gap-3">
-            <button onClick={onBack} className="btn-ghost text-xs">Back</button>
-            <button onClick={onNext} className="btn-primary text-xs">Continue</button>
-          </div>
-        </div>
-      ) : null}
-
-      {step === 3 ? (
-        <div className="bg-surface border border-edge rounded-xl p-5">
           <div className="text-display text-2xl tracking-wide">Review & finish</div>
-          <div className="mt-2 text-text2 text-sm">
-            We’ll save your career entries and fitness tests, then take you to the app.
-          </div>
+          <div className="mt-2 text-text2 text-sm">We will save your career entries, then take you to the app.</div>
 
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="rounded-xl border border-edge bg-background p-4">
@@ -584,18 +467,14 @@ function AthleteWizard({
             </div>
             <div className="rounded-xl border border-edge bg-background p-4">
               <div className="text-text2 text-xs uppercase tracking-widest">What will be saved</div>
-              <div className="mt-2 text-text2 text-sm">
-                {careerEntries.length} career entries
-                <br />
-                {fitnessTests.length} fitness tests
-              </div>
+              <div className="mt-2 text-text2 text-sm">{careerEntries.length} career entries</div>
             </div>
           </div>
 
           <div className="mt-4 flex justify-between gap-3">
-            <button onClick={onBack} className="btn-ghost text-xs">Back</button>
-            <button onClick={onFinish} disabled={submittingAll} className="btn-primary text-xs">
-              {submittingAll ? 'Saving…' : 'Finish onboarding'}
+            <button type="button" onClick={onBack} className="btn-ghost text-xs">Back</button>
+            <button type="button" onClick={onFinish} disabled={submittingAll} className="btn-primary text-xs">
+              {submittingAll ? 'Saving...' : 'Finish onboarding'}
             </button>
           </div>
         </div>
@@ -636,8 +515,8 @@ function ClubWizard({
           </div>
 
           <div className="mt-4 flex justify-end gap-3">
-            <button onClick={onSaveBasics} disabled={!canProceed || savingBasics} className="btn-primary text-xs">
-              {savingBasics ? 'Saving…' : 'Save club & Continue'}
+            <button type="button" onClick={onSaveBasics} disabled={!canProceed || savingBasics} className="btn-primary text-xs">
+              {savingBasics ? 'Saving...' : 'Save club & Continue'}
             </button>
           </div>
         </div>
@@ -654,8 +533,8 @@ function ClubWizard({
           </div>
 
           <div className="mt-4 flex justify-end gap-3">
-            <button onClick={onFinish} disabled={submittingAll || !clubSaved} className="btn-primary text-xs">
-              {submittingAll ? 'Entering…' : 'Enter app'}
+            <button type="button" onClick={onFinish} disabled={submittingAll || !clubSaved} className="btn-primary text-xs">
+              {submittingAll ? 'Entering...' : 'Enter app'}
             </button>
           </div>
         </div>
@@ -663,4 +542,3 @@ function ClubWizard({
     </div>
   )
 }
-
