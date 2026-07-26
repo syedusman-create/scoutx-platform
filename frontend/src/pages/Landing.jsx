@@ -1,9 +1,17 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { Dumbbell, Search, CheckCircle, ShieldAlert, Award, User, Compass, Star } from 'lucide-react'
+import { useAuth } from '../context/AuthContext.jsx'
+import { resolvePostAuthRoute } from '../utils/authFlow.js'
 
 export default function Landing() {
+  const { user } = useAuth()
   const [mobileOpen, setMobileOpen] = React.useState(false)
+
+  // If already logged in, redirect to the correct dashboard
+  if (user) {
+    return <Navigate to={resolvePostAuthRoute(user.role, user.onboarding_completed)} replace />
+  }
 
   return (
     <div className="min-h-screen premium-gradient-bg text-white font-body selection:bg-lime/20 selection:text-lime">
@@ -18,6 +26,7 @@ export default function Landing() {
           <nav className="hidden md:flex items-center gap-8 text-xs font-bold uppercase tracking-wider text-text3">
             <a href="#features" className="hover:text-lime transition-colors">Features</a>
             <a href="#showcase" className="hover:text-lime transition-colors">Platform Live</a>
+            <a href="#stories" className="hover:text-lime transition-colors">Success Stories</a>
             <a href="#how" className="hover:text-lime transition-colors">How It Works</a>
           </nav>
           <div className="flex items-center gap-3">
@@ -48,6 +57,7 @@ export default function Landing() {
             <div className="absolute top-20 left-0 right-0 z-50 bg-surface border border-edge rounded-2xl p-5 flex flex-col gap-4 md:hidden shadow-2xl animate-fade-up">
               <a href="#features" onClick={() => setMobileOpen(false)} className="text-text2 hover:text-lime font-bold uppercase tracking-wider text-xs">Features</a>
               <a href="#showcase" onClick={() => setMobileOpen(false)} className="text-text2 hover:text-lime font-bold uppercase tracking-wider text-xs">Platform Live</a>
+              <a href="#stories" onClick={() => setMobileOpen(false)} className="text-text2 hover:text-lime font-bold uppercase tracking-wider text-xs">Success Stories</a>
               <a href="#how" onClick={() => setMobileOpen(false)} className="text-text2 hover:text-lime font-bold uppercase tracking-wider text-xs">How It Works</a>
               <hr className="border-edge/40" />
               <div className="flex flex-col gap-2">
@@ -73,8 +83,9 @@ export default function Landing() {
             </h1>
 
             <p className="text-text2 text-sm md:text-base max-w-xl leading-relaxed">
-              Talented grassroots football players in India have no digital presence—so scouts can't find them.
-              ScoutX gives athletes a verified profile, career history, and standardized fitness scores, and gives clubs a powerful recruitment pipeline.
+              Every year, thousands of talented Indian footballers go unnoticed — not because they lack skill, but because they have no digital presence.
+              ScoutX changes that. A verified profile. Standardized fitness scores. Direct access to clubs and scouts who are actively recruiting.
+              No more WhatsApp video clips. No more waiting for someone to "discover" you.
             </p>
 
             <div className="pt-3 flex flex-wrap items-center gap-3">
@@ -150,13 +161,13 @@ export default function Landing() {
         {/* Feature Cards Grid */}
         <section id="features" className="mt-28 space-y-8">
           <div className="text-center space-y-2">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-display">Everything a scout needs. Everything an athlete deserves.</h2>
-            <p className="text-text3 text-sm max-w-xl mx-auto">Standardized physical data combined with verified athletic match histories.</p>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-display">Built for the way recruitment actually works.</h2>
+            <p className="text-text3 text-sm max-w-xl mx-auto">Scouts need verified data. Athletes need visibility. We built the bridge.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-5">
-            <FeatureCard icon={<CheckCircle className="text-lime" />} title="Verified Athlete Profiles" desc="Say goodbye to fake profiles. Our verification system builds credibility with scouts instantly." />
-            <FeatureCard icon={<Search className="text-lime" />} title="Club Scout Pipeline" desc="Clubs and scouts can query athletes by age, height, position, and fitness scores in seconds." />
-            <FeatureCard icon={<Award className="text-lime" />} title="Performance Records" desc="Keep track of every goal, match, and assist inside your dynamic verified professional record." />
+            <FeatureCard icon={<CheckCircle className="text-lime" />} title="Verified Athlete Profiles" desc="Every profile is backed by real match data and standardized fitness scores. Scouts stop guessing and start trusting — before they even message you." />
+            <FeatureCard icon={<Search className="text-lime" />} title="Smart Scout Pipeline" desc="Filter by position, fitness score, age, and location. Find exactly the athlete you need in seconds — no more scrolling through unverified WhatsApp forwards." />
+            <FeatureCard icon={<Award className="text-lime" />} title="Live Performance Record" desc="Every goal, assist, match, and fitness test is tracked and visible. Your career history grows with you — from grassroots trials to professional contracts." />
           </div>
         </section>
 
@@ -164,15 +175,16 @@ export default function Landing() {
         <section id="showcase" className="mt-24 bg-surface/30 border border-edge/30 rounded-2xl p-6 md:p-10 space-y-8">
           <div className="grid lg:grid-cols-2 gap-8 items-center">
             <div className="space-y-4">
-              <span className="text-xs text-lime font-bold uppercase tracking-widest">Designed for discovery</span>
-              <h3 className="text-3xl font-bold tracking-tight">The Modern Sports Recruitment Pipeline</h3>
+              <span className="text-xs text-lime font-bold uppercase tracking-widest">See it in action</span>
+              <h3 className="text-3xl font-bold tracking-tight">Recruitment should be this simple</h3>
               <p className="text-text2 text-sm leading-relaxed">
-                Gone are the days of sending blurry video clips over WhatsApp. ScoutX organizes trials, matches verified profiles with open opportunities, and updates athletic records in real-time.
+                A club posts a trial. Athletes with matching fitness scores and position requirements get notified. The club reviews verified profiles — not highlight reels curated by agents.
+                No WhatsApp chaos. No unreliable scouts. Just data-driven recruitment.
               </p>
               <ul className="space-y-2.5 text-xs text-text1 font-semibold">
-                <li className="flex items-center gap-2">✓ Dynamic followers system to keep track of rising prospects.</li>
-                <li className="flex items-center gap-2">✓ Advanced sorting based on verified match statistics.</li>
-                <li className="flex items-center gap-2">✓ Standardized fitness analytics charts.</li>
+                <li className="flex items-center gap-2">✓ Follow rising prospects and get notified when they update their stats.</li>
+                <li className="flex items-center gap-2">✓ Sort and filter by verified match data — not reputation.</li>
+                <li className="flex items-center gap-2">✓ Standardized fitness scores so you compare athletes objectively.</li>
               </ul>
             </div>
             <div className="bg-raised border border-edge rounded-xl p-5 space-y-4">
@@ -202,11 +214,152 @@ export default function Landing() {
           </div>
         </section>
 
+        {/* Success Stories */}
+        <section id="stories" className="mt-28 space-y-8">
+          <div className="text-center space-y-2">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-display">Exposure changes everything</h2>
+            <p className="text-text3 text-sm max-w-xl mx-auto">These players didn't just have talent. They had someone watching at the right time. Thousands of others never got that.</p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-5">
+
+            {/* Jamie Vardy — released at 16, factory worker, Premier League winner */}
+            <div className="rounded-xl border border-edge/40 bg-surface/20 p-6 glow-card-hover relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-bl-full -mr-8 -mt-8" />
+              <div className="flex items-start gap-4">
+                <div className="h-14 w-14 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-xl font-bold text-amber-400 flex-shrink-0">JV</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-text1 font-bold text-lg">Jamie Vardy</div>
+                  <div className="text-text3 text-xs mt-0.5">Released at 16. Working in a factory at 25. Premier League winner at 29.</div>
+                </div>
+              </div>
+              <div className="mt-4 text-text2 text-xs leading-relaxed space-y-3">
+                <p>
+                  Vardy was released by Sheffield Wednesday's academy at 16. By 25 he was playing seventh-tier football for Stocksbridge Park Steels while working at a carbon fibre factory. No academy scout was going to find him there.
+                </p>
+                <p className="text-lime font-semibold">
+                  A move to Fleetwood Town in the Conference put him on a bigger stage. Within 18 months Leicester City signed him. Two years later he was in the Premier League. A year after that, he'd won it.
+                </p>
+                <p>
+                  Same player. Same lungs. Same finishing. The only thing that changed was the number of people watching.
+                </p>
+              </div>
+              <div className="mt-3 text-[11px] text-text3 italic border-t border-edge/20 pt-3">
+                How many 25-year-olds in India are still playing on the wrong stage?
+              </div>
+            </div>
+
+            {/* Sunil Chhetri — Delhi local circuit to India legend */}
+            <div className="rounded-xl border border-edge/40 bg-surface/20 p-6 glow-card-hover relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-lime/5 rounded-bl-full -mr-8 -mt-8" />
+              <div className="flex items-start gap-4">
+                <div className="h-14 w-14 rounded-xl bg-lime/10 border border-lime/20 flex items-center justify-center text-xl font-bold text-lime flex-shrink-0">SC</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-text1 font-bold text-lg">Sunil Chhetri</div>
+                  <div className="text-text3 text-xs mt-0.5">Started in Delhi's local club scene. Now India's most-capped player.</div>
+                </div>
+              </div>
+              <div className="mt-4 text-text2 text-xs leading-relaxed space-y-3">
+                <p>
+                  Chhetri grew up in Delhi with no football academy pathway. He played for City Club, a local side, while finishing school. There was no structured scouting system — just word of mouth and trial requests.
+                </p>
+                <p className="text-lime font-semibold">
+                  He broke into professional football through Mohun Bagan's youth setup. From there, his performances earned him an India call-up at 20. Twenty years later, he has 94 international goals — the third-highest among active players worldwide.
+                </p>
+                <p>
+                  If his local coach hadn't recommended him for that trial, one of India's greatest careers might have never left Delhi.
+                </p>
+              </div>
+              <div className="mt-3 text-[11px] text-text3 italic border-t border-edge/20 pt-3">
+                How many other Delhi kids are waiting on a recommendation that never comes?
+              </div>
+            </div>
+
+            {/* Mohamed Salah — from village to global stage */}
+            <div className="rounded-xl border border-edge/40 bg-surface/20 p-6 glow-card-hover relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-ruby/5 rounded-bl-full -mr-8 -mt-8" />
+              <div className="flex items-start gap-4">
+                <div className="h-14 w-14 rounded-xl bg-ruby/10 border border-ruby/20 flex items-center justify-center text-xl font-bold text-ruby flex-shrink-0">MS</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-text1 font-bold text-lg">Mohamed Salah</div>
+                  <div className="text-text3 text-xs mt-0.5">Grew up in a village with no pitch. Became a global superstar.</div>
+                </div>
+              </div>
+              <div className="mt-4 text-text2 text-xs leading-relaxed space-y-3">
+                <p>
+                  Salah grew up in Nagrig, a small Egyptian village with no football infrastructure. He commuted hours each way to train on whatever pitch was available. There were no scouts at his matches, no agents tracking young talent in the Nile Delta.
+                </p>
+                <p className="text-lime font-semibold">
+                  A trial with El Mokawloon SC in Cairo — secured through a local connection — gave him his first professional contract. Within four years he was at Chelsea. Within eight he was breaking the Premier League scoring record.
+                </p>
+                <p>
+                  In a different system, a player with his drive and ability gets identified long before he has to travel four hours for a training session.
+                </p>
+              </div>
+              <div className="mt-3 text-[11px] text-text3 italic border-t border-edge/20 pt-3">
+                Talent that travels four hours for training doesn't need more talent. It needs more visibility.
+              </div>
+            </div>
+
+            {/* Victor Osimhen — from Lagos streets to Serie A champion */}
+            <div className="rounded-xl border border-edge/40 bg-surface/20 p-6 glow-card-hover relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-ice/5 rounded-bl-full -mr-8 -mt-8" />
+              <div className="flex items-start gap-4">
+                <div className="h-14 w-14 rounded-xl bg-ice/10 border border-ice/20 flex items-center justify-center text-xl font-bold text-ice flex-shrink-0">VO</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-text1 font-bold text-lg">Victor Osimhen</div>
+                  <div className="text-text3 text-xs mt-0.5">Lost his mother at 14. Serie A top scorer at 23. €70M striker.</div>
+                </div>
+              </div>
+              <div className="mt-4 text-text2 text-xs leading-relaxed space-y-3">
+                <p>
+                  Osimhen grew up in the Olusosun slum in Lagos. After losing his mother, he sold bottled water and newspapers on the streets to help his family. He played on dirt pitches with no boots and no one documenting his games.
+                </p>
+                <p className="text-lime font-semibold">
+                  A grassroots academy in Lagos — Ultimate Strikers — took him in. His performances there earned him a spot at the U-17 World Cup in 2015, where European scouts finally saw him. He signed with Wolfsburg at 17.
+                </p>
+                <p>
+                  At every step before that World Cup, his career depended on someone in his local community deciding to help. A more connected system wouldn't leave that to chance.
+                </p>
+              </div>
+              <div className="mt-3 text-[11px] text-text3 italic border-t border-edge/20 pt-3">
+                How many players need to sell water before someone notices?
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        {/* Belief Statement */}
+        <section className="mt-24 max-w-3xl mx-auto text-center space-y-6 px-4">
+          <div className="w-16 h-0.5 bg-lime/40 mx-auto" />
+          <p className="text-text2 text-sm md:text-base leading-relaxed">
+            There have been thousands of Indian footballers who trained harder, played smarter, and wanted it more than the names you just read.
+            They never made it. Not because they lacked talent — but because no one knew they existed.
+          </p>
+          <p className="text-text2 text-sm md:text-base leading-relaxed">
+            <span className="text-lime font-semibold">Exposure</span> is the difference between potential and greatness.
+            In a country of 1.5 billion people, we produce world-class talent in every field — yet we struggle to build one World Cup-ready team.
+            The problem isn't the players. It never was.
+            It's a system that fails to find them at the right time, connect them to the right people, and put their story in front of the right clubs.
+          </p>
+          <p className="text-text1 font-semibold text-base">
+            ScoutX exists to fix that pipeline. Not by creating talent — by making sure it gets seen.
+          </p>
+          <div className="pt-4">
+            <Link
+              to="/signup"
+              className="inline-flex items-center gap-2 rounded-xl bg-lime px-6 py-3 text-background text-sm font-bold uppercase tracking-wider hover:brightness-110 hover:shadow-[0_0_20px_-3px_rgba(198,241,53,0.4)] transition-all"
+            >
+              Be part of the system
+            </Link>
+          </div>
+        </section>
+
         {/* Footer Waitlist Box */}
         <section className="mt-24 mb-12 rounded-3xl border border-lime/10 bg-gradient-to-tr from-lime/5 to-surface/20 p-8 md:p-12 text-center space-y-5 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-lime/10 to-transparent opacity-30 pointer-events-none" />
-          <h3 className="text-3xl font-bold tracking-tight">Ready to build your digital presence?</h3>
-          <p className="text-text2 text-sm max-w-md mx-auto">Be first to know when ScoutX launches for your sport and division. Setup your dashboard catalog today.</p>
+          <h3 className="text-3xl font-bold tracking-tight">Your profile is your pitch. Make it count.</h3>
+          <p className="text-text2 text-sm max-w-md mx-auto">Join India's fastest-growing football discovery network. Create your verified profile in minutes — connect with clubs and scouts who are actively searching for talent like yours.</p>
           <div className="flex justify-center gap-3 pt-2">
             <Link to="/signup" className="rounded-xl bg-lime px-6 py-3 text-background text-xs font-bold uppercase tracking-wider hover:brightness-110 hover:-translate-y-px transition-all">Create Account</Link>
             <Link to="/login" className="rounded-xl border border-edge bg-surface/50 px-6 py-3 text-xs font-bold uppercase tracking-wider hover:border-line hover:text-white transition-all">Login</Link>

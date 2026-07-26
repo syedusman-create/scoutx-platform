@@ -24,7 +24,11 @@ export default function DashboardNavbar() {
   }
 
   const handleLogout = async () => {
-    await logout()
+    try {
+      await logout()
+    } catch {
+      // Logout works even if Supabase signOut fails (clear local state)
+    }
     navigate('/')
   }
 

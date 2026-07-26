@@ -2,9 +2,15 @@ const { pool } = require('../config/db')
 
 const getUserSummaryById = async (userId) => {
   const result = await pool.query(
-    `SELECT id, email, role
-     FROM users
-     WHERE id = $1`,
+    `SELECT
+       u.id,
+       u.email,
+       u.role,
+       COALESCE(ap.full_name, cp.club_name, split_part(u.email, '@', 1)) AS other_user_name
+     FROM users u
+     LEFT JOIN athlete_profiles ap ON ap.user_id = u.id
+     LEFT JOIN club_profiles cp ON cp.user_id = u.id
+     WHERE u.id = $1`,
     [userId]
   )
   return result.rows[0] || null
@@ -62,14 +68,17 @@ const listConversationsForUser = async (userId) => {
        c.other_user_id,
        u.email AS other_user_email,
        u.role AS other_user_role,
+       COALESCE(ap.full_name, cp.club_name, split_part(u.email, '@', 1)) AS other_user_name,
        l.last_message_at,
        l.last_message_body,
        COUNT(*)::int AS total_messages,
        COALESCE(SUM(CASE WHEN c.receiver_id = $1 AND c.is_read = false THEN 1 ELSE 0 END), 0)::int AS unread_count
      FROM conv c
      JOIN users u ON u.id = c.other_user_id
+     LEFT JOIN athlete_profiles ap ON ap.user_id = u.id
+     LEFT JOIN club_profiles cp ON cp.user_id = u.id
      JOIN latest l ON l.other_user_id = c.other_user_id
-     GROUP BY c.other_user_id, u.email, u.role, l.last_message_at, l.last_message_body
+     GROUP BY c.other_user_id, u.email, u.role, ap.full_name, cp.club_name, l.last_message_at, l.last_message_body
      ORDER BY l.last_message_at DESC`,
     [userId]
   )

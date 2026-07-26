@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext.jsx'
 import { supabase } from '../api/supabase.js'
 import PipelineBoard from '../components/club/PipelineBoard.jsx'
 
 export default function ClubDashboard() {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const qc = useQueryClient()
   const [errorMsg, setErrorMsg] = useState('')
@@ -325,9 +326,18 @@ export default function ClubDashboard() {
                         <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded border ${athlete.is_open ? 'border-lime/20 bg-lime/10 text-lime' : 'border-edge bg-background text-text2'}`}>
                           {athlete.is_open ? 'Open to opportunities' : 'Private'}
                         </span>
-                        <Link to={`/athletes/${athlete.id}`} className="text-lime text-xs font-bold uppercase tracking-wide hover:underline">
-                          View Profile
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => navigate(`/messages?user=${athlete.user_id}`)}
+                            title="Message"
+                            className="w-7 h-7 rounded-md flex items-center justify-center text-xs bg-edge/30 border border-edge hover:bg-lift text-text2 hover:text-ice transition-all"
+                          >
+                            💬
+                          </button>
+                          <Link to={`/athletes/${athlete.id}`} className="text-lime text-xs font-bold uppercase tracking-wide hover:underline">
+                            View Profile
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   ))}

@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   listConversationsApi,
   getConversationApi,
   sendMessageApi,
-  markConversationReadApi
+  markConversationReadApi,
+  searchUsersApi
 } from '../api/message.api'
 import { useAuth } from '../context/AuthContext.jsx'
 
@@ -61,7 +62,7 @@ function EmptyMessages() {
       <div>
         <div className="text-text1 font-semibold text-lg">No messages yet</div>
         <div className="text-text2 text-sm mt-1">
-          Visit an athlete profile and click <span className="text-lime font-semibold">Message</span> to start a conversation.
+          Click <span className="text-lime font-semibold">+ New</span> above to find and message someone.
         </div>
       </div>
     </div>
@@ -112,6 +113,26 @@ function ConvItem({ conv, isActive, onClick }) {
           )}
         </div>
       </div>
+    </button>
+  )
+}
+
+// ── User search result item ────────────────────────────────────
+function UserSearchItem({ user, onClick }) {
+  const displayName = user.display_name || user.email?.split('@')[0] || 'User'
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left flex gap-3 items-center px-3 py-2.5 rounded-lg hover:bg-lift transition-all duration-150"
+    >
+      <Avatar email={user.email} size="sm" />
+      <div className="flex-1 min-w-0">
+        <div className="text-text1 text-sm font-semibold truncate">{displayName}</div>
+        <div className="text-text3 text-xs">
+          {user.email} <span className="capitalize">· {user.role}</span>
+        </div>
+      </div>
+      <span className="text-lime text-xs font-bold flex-shrink-0">Message →</span>
     </button>
   )
 }
@@ -175,12 +196,17 @@ function ChatHeader({ conv, onBack }) {
 // ── Main component ────────────────────────────────────────────
 export default function Messages() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [selectedUser, setSelectedUser] = useState(searchParams.get('user') || null)
+  const urlSelectedUser = searchParams.get('user') || null
+  const [selectedUser, setSelectedUser] = useState(urlSelectedUser)
   const [text, setText] = useState('')
-  const [showList, setShowList] = useState(true)
+  const [showList, setShowList] = useState(!urlSelectedUser)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showSearch, setShowSearch] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const searchInputRef = useRef(null)
   const qc = useQueryClient()
 
   // Scroll to bottom whenever messages update
@@ -210,6 +236,19 @@ export default function Messages() {
     refetchInterval: selectedUser ? 5000 : false // poll every 5s when open
   })
 
+  // User search for "New Message"
+  const searchQ = useQuery({
+    queryKey: ['user-search', searchQuery],
+    queryFn: async () => {
+      if (!searchQuery.trim() || searchQuery.trim().length < 2) return []
+      const res = await searchUsersApi(searchQuery.trim())
+      const users = res.data?.data || []
+      // Filter out self if not already done by backend
+      return users.filter(u => u.id !== user?.id)
+    },
+    enabled: showSearch && searchQuery.trim().length >= 2
+  })
+
   useEffect(() => { scrollToBottom() }, [convQ.data?.messages])
 
   // Mark read when conversation opens
@@ -217,6 +256,17 @@ export default function Messages() {
     mutationFn: (uid) => markConversationReadApi(uid),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['conversations'] })
   })
+
+  useEffect(() => {
+    setSelectedUser(urlSelectedUser)
+    setShowList(!urlSelectedUser)
+  }, [urlSelectedUser])
+
+  useEffect(() => {
+    if (selectedUser) {
+      markReadM.mutate(selectedUser)
+    }
+  }, [selectedUser])
 
   const sendM = useMutation({
     mutationFn: () => sendMessageApi(selectedUser, text.trim()),
@@ -232,9 +282,6 @@ export default function Messages() {
     setShowList(false)
     setSearchParams({ user: uid })
     inputRef.current?.focus()
-    if ((conv?.unread_count || 0) > 0) {
-      markReadM.mutate(uid)
-    }
   }
 
   const handleSend = (e) => {
@@ -270,10 +317,54 @@ export default function Messages() {
       ].join(' ')}>
 
         {/* Header */}
-        <div className="px-4 py-4 border-b border-edge">
-          <div className="font-bold text-text1 text-lg" style={{ fontFamily: '"Bebas Neue", sans-serif', letterSpacing: '1px' }}>
-            Messages
+        <div className="px-4 py-4 border-b border-edge space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="font-bold text-text1 text-lg" style={{ fontFamily: '"Bebas Neue", sans-serif', letterSpacing: '1px' }}>
+              Messages
+            </div>
+            <button
+              onClick={() => { setShowSearch(v => !v); if (!showSearch) setTimeout(() => searchInputRef.current?.focus(), 100) }}
+              className={[
+                'flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg border transition-all',
+                showSearch
+                  ? 'bg-lime/10 border-lime/30 text-lime'
+                  : 'text-text3 border-edge hover:text-text1 hover:bg-lift'
+              ].join(' ')}
+            >
+              {showSearch ? '✕ Close' : '+ New'}
+            </button>
           </div>
+          {showSearch && (
+            <div className="relative">
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search users by name or email…"
+                className="w-full bg-lift border border-edge rounded-lg px-3 py-2 text-sm text-text1 placeholder:text-text3 outline-none focus:border-lime/50 transition-colors"
+              />
+              {searchQuery.length >= 2 && searchQ.data && searchQ.data.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-edge rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto">
+                  {searchQ.data.map(u => (
+                    <UserSearchItem
+                      key={u.id}
+                      user={u}
+                      onClick={() => {
+                        setShowSearch(false)
+                        setSearchQuery('')
+                        selectConversation(u.id, null)
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+              {searchQuery.length >= 2 && searchQ.isFetched && searchQ.data?.length === 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-edge rounded-xl shadow-2xl z-50 p-3 text-center text-text3 text-xs">
+                  No users found matching "{searchQuery}"
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* List */}
@@ -312,7 +403,7 @@ export default function Messages() {
             <div>
               <div className="text-text1 font-semibold text-xl">Your messages</div>
               <div className="text-text2 text-sm mt-2 max-w-xs">
-                Select a conversation from the list, or visit an athlete profile and click <span className="text-lime font-semibold">Message</span> to start one.
+                Click <span className="text-lime font-semibold">+ New</span> to start a conversation, or use the Message button on any athlete or club profile.
               </div>
             </div>
           </div>

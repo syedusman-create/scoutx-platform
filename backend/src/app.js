@@ -14,6 +14,7 @@ const uploadsRoutes = require('./routes/uploads.routes')
 const challengeRoutes = require('./routes/challenge.routes')
 const leaderboardRoutes = require('./routes/leaderboard.routes')
 const achievementRoutes = require('./routes/achievement.routes')
+const userRoutes = require('./routes/user.routes')
 
 const app = express()
 
@@ -54,6 +55,7 @@ app.use('/api/uploads', uploadsRoutes)
 app.use('/api/challenges', challengeRoutes)
 app.use('/api/leaderboards', leaderboardRoutes)
 app.use('/api/achievements', achievementRoutes)
+app.use('/api/users', userRoutes)
 
 // 404 handler
 app.use((req, res) => {

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import SearchFilters from '../components/club/SearchFilters.jsx'
 import { discoverAthletesApi, upsertShortlistApi } from '../api/club.api'
@@ -146,14 +146,13 @@ function AthleteCard({ athlete, onShortlist, isShortlisting }) {
           >
             ⭐
           </button>
-          <div
-            role="button"
-            onClick={e => { e.preventDefault(); window.location.href = `/messages?user=${athlete.user_id}` }}
+          <button
+            onClick={e => { e.preventDefault(); navigate(`/messages?user=${athlete.user_id}`) }}
             title="Message athlete"
             className="w-8 h-8 rounded-lg flex items-center justify-center text-sm bg-edge/50 border border-edge hover:bg-lift text-text3 hover:text-ice transition-all"
           >
             💬
-          </div>
+          </button>
         </div>
       </div>
     </Link>
@@ -177,6 +176,7 @@ function EmptyResults({ hasFilters }) {
 
 // ── Main ──────────────────────────────────────────────────────
 export default function Discover() {
+  const navigate = useNavigate()
   const qc = useQueryClient()
   const [filters, setFilters] = useState(initialFilters)
 

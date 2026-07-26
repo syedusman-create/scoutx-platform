@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
 import { useAuth } from '../context/AuthContext.jsx'
+import useStore from '../store/useStore.js'
 import { SPORT_OPTIONS } from '../constants/sports.js'
 import { supabase } from '../api/supabase.js'
 
@@ -34,6 +35,8 @@ const toDateInputValue = (value) => {
 
 export default function Startup() {
   const { user } = useAuth()
+  const setAuth = useStore((s) => s.setAuth)
+  const token = useStore((s) => s.token)
   const role = user?.role
   const navigate = useNavigate()
   const location = useLocation()
@@ -179,6 +182,9 @@ export default function Startup() {
         .update({ onboarding_completed: true })
         .eq('id', user.id)
       if (accountCompleteError) throw accountCompleteError
+
+      // Update local Zustand store so StartupGate sees the change immediately
+      setAuth({ ...user, onboarding_completed: true }, token)
 
       if (stepStorageKey) window.sessionStorage.removeItem(stepStorageKey)
       navigate(getRedirectPath(role), { replace: true })

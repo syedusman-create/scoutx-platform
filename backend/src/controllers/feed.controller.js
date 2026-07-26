@@ -21,7 +21,7 @@ const createPost = async (req, res) => {
 
     const post = await PostModel.createPost({
       authorId,
-      body: value.body,
+      content: value.body,
       mediaUrl: value.media_url,
       mediaType: value.media_type
     })

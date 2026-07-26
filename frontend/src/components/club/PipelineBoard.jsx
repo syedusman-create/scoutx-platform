@@ -1,5 +1,5 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 const STAGES = ['applied', 'reviewing', 'invited', 'signed']
 
@@ -13,7 +13,7 @@ const StageHeader = ({ stage, count }) => {
   )
 }
 
-const Card = ({ row, onUpdateStage }) => {
+const Card = ({ row, onUpdateStage, onMessage }) => {
   return (
     <div className="bg-raised border border-edge rounded-xl p-3">
       <div className="flex items-start justify-between gap-2">
@@ -36,23 +36,33 @@ const Card = ({ row, onUpdateStage }) => {
           View
         </Link>
 
-        <select
-          value={row.stage}
-          onChange={(e) => onUpdateStage(row.id, e.target.value)}
-          className="rounded-md bg-surface border border-edge px-2 py-1 text-text1 text-xs outline-none focus:border-lime"
-        >
-          {STAGES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={(e) => { e.preventDefault(); onMessage?.(row.user_id) }}
+            title="Message athlete"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-xs bg-edge/40 border border-edge hover:bg-lift text-text2 hover:text-ice transition-all"
+          >
+            💬
+          </button>
+          <select
+            value={row.stage}
+            onChange={(e) => onUpdateStage(row.id, e.target.value)}
+            className="rounded-md bg-surface border border-edge px-2 py-1 text-text1 text-xs outline-none focus:border-lime"
+          >
+            {STAGES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
     </div>
   )
 }
 
 export default function PipelineBoard({ rows = [], onUpdateStage }) {
+  const navigate = useNavigate()
   const grouped = STAGES.reduce((acc, s) => {
     acc[s] = rows.filter((r) => r.stage === s)
     return acc
@@ -68,7 +78,7 @@ export default function PipelineBoard({ rows = [], onUpdateStage }) {
               <div className="text-text2 text-sm">No athletes.</div>
             ) : (
               grouped[stage].map((row) => (
-                <Card key={row.id} row={row} onUpdateStage={onUpdateStage} />
+                <Card key={row.id} row={row} onUpdateStage={onUpdateStage} onMessage={(uid) => navigate(`/messages?user=${uid}`)} />
               ))
             )}
           </div>
